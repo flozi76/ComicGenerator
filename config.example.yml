@@ -1,0 +1,27 @@
+providers:
+  active_text_provider: openai
+  active_image_provider: dall-e-3   # options: dall-e-3, flux
+
+openai:
+  api_key: ""                        # set your OpenAI key here (or in config.yml)
+  text_model: gpt-4o
+  image_model: dall-e-3
+  image_size: "1024x1024"
+  image_quality: standard
+  max_concurrent_images: 4          # semaphore cap for parallel DALL-E calls
+
+anthropic:
+  api_key: ""                        # reserved — not used yet
+
+black_forest_labs:
+  api_key: ""                        # reserved — for Flux Pro switch
+  model: flux-pro
+
+compositor:
+  canvas_width: 2400
+  canvas_height: 3200
+  gap_px: 8                         # gutter between panels
+  margin_px: 24                     # outer page margin
+
+output:
+  base_dir: output                  # relative to project root
