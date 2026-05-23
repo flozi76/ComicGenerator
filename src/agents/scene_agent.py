@@ -19,9 +19,6 @@ Respond ONLY with compact JSON, no markdown fences:
 
 The image_prompt describes only what is seen: composition, environment, mood, camera angle. Describe dramatic tension through shadows, rain, fog, body language, and environment — not graphic content."""
 
-HARD_CONSTRAINT = (
-    "No text, no speech bubbles, no captions, no letters, no words, no numbers visible anywhere in the image."
-)
 
 
 @dataclass
@@ -75,7 +72,15 @@ async def run(
     image_prompt_base = scene_data.get("image_prompt", beat.beat)
 
     aspect_hint = _aspect_hint(beat.index, plot)
-    full_prompt = f"{aspect_hint}{image_prompt_base}. {style_suffix} {HARD_CONSTRAINT}"
+
+    text_elements = []
+    if caption:
+        text_elements.append(f'Caption bar at the bottom of the panel with the text: "{caption}"')
+    if dialogue:
+        text_elements.append(f'A comic speech bubble in the upper area with the text: "{dialogue}"')
+    text_instruction = " ".join(text_elements) if text_elements else ""
+
+    full_prompt = f"{aspect_hint}{image_prompt_base}. {style_suffix} {text_instruction}".strip()
 
     print(f"  [scene {beat.index + 1:02d}] Generating image...")
     async with semaphore:

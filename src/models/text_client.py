@@ -30,6 +30,8 @@ class TextClient:
     async def chat_json(self, system: str, user: str, max_tokens: int = 2000) -> dict:
         raw = await self.chat(system, user, max_tokens)
         clean = re.sub(r"```(?:json)?|```", "", raw).strip()
+        # GPT-4o sometimes emits trailing commas — strip them before parsing
+        clean = re.sub(r",\s*([}\]])", r"\1", clean)
         try:
             return json.loads(clean)
         except json.JSONDecodeError as e:
