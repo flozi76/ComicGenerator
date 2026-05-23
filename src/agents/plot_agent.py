@@ -62,6 +62,45 @@ beats must have exactly panel_count items, indexed 0 to panel_count-1.
 Each beat is ONE short sentence. Be concise and dark.
 """
 
+FUN_PLOT_SYSTEM_PROMPT = f"""You are a comedic comic book director with a flair for absurdist humour and slapstick chaos. Given a story idea and a visual style description, create a single-page comic outline that is silly, unexpected, and fun.
+
+Respond ONLY with a single compact JSON object — no markdown fences, no explanation.
+
+The JSON must have exactly these fields:
+{{
+  "title": "short punchy comedic title",
+  "tagline": "one ridiculous sentence — the joke hook",
+  "panel_count": <integer between 4 and 12>,
+  "layout": <layout object — see schema below>,
+  "beats": [
+    {{"index": 0, "beat": "one short sentence describing what happens in this scene"}},
+    ...
+  ]
+}}
+
+LAYOUT SCHEMA — the weighted row system:
+- layout.type is always "rows"
+- layout.rows is an ordered top-to-bottom list of rows
+- Each row has height_weight (float, proportional row height — 1.0 = equal share with others)
+- Each row has panels: a left-to-right list of panels in that row
+- Each panel has panel_index (0-based integer) and weight (float, proportional width in this row)
+- panel_index values must cover exactly 0 to panel_count-1 with no duplicates or gaps
+
+Layout example for 4 panels (splash + 3-grid):
+{LAYOUT_SCHEMA_EXAMPLE}
+
+Layout guidance:
+- Open with a large, ridiculous establishing panel (height_weight 1.5-2.0) that sets the absurd premise
+- Use rapid-fire 3-panel rows for escalating chaos or comedic timing (setup / escalation / punchline)
+- Use a single wide panel for the biggest gag or visual joke
+- End on a funny twist or deadpan reaction shot
+- Match layout pacing to comedic rhythm — fast beats for slapstick, slow beats for the punchline
+
+beats must have exactly panel_count items, indexed 0 to panel_count-1.
+Each beat is ONE short sentence. Lean into absurdity, misunderstandings, escalating chaos, and comic irony.
+Avoid darkness; favour the ridiculous.
+"""
+
 
 @dataclass
 class Beat:
@@ -168,10 +207,11 @@ def _parse_and_validate(data: dict, style: str) -> PlotResult:
     )
 
 
-def run(idea: str, style_prompt: str, cfg: Config, style_name: str = "dylan-dog") -> PlotResult:
+def run(idea: str, style_prompt: str, cfg: Config, style_name: str = "dylan-dog", fun: bool = False) -> PlotResult:
     import re
     client = OpenAI(api_key=cfg.openai.api_key)
     user_msg = f"Style:\n{style_prompt}\n\nStory idea:\n{idea}"
+    system_prompt = FUN_PLOT_SYSTEM_PROMPT if fun else PLOT_SYSTEM_PROMPT
 
     last_error = None
     for attempt in range(2):
@@ -179,7 +219,7 @@ def run(idea: str, style_prompt: str, cfg: Config, style_name: str = "dylan-dog"
             model=cfg.openai.text_model,
             max_tokens=2000,
             messages=[
-                {"role": "system", "content": PLOT_SYSTEM_PROMPT},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_msg},
             ],
         )

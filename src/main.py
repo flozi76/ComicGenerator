@@ -42,20 +42,21 @@ def build_output_dir(base: Path, title_slug: str) -> Path:
     return folder
 
 
-async def run_pipeline(idea: str, style_name: str, cfg_path: Path) -> None:
+async def run_pipeline(idea: str, style_name: str, cfg_path: Path, fun: bool = False) -> None:
     cfg = load_config(cfg_path)
     style_suffix = load_style(style_name)
 
     print(f"\n=== Comic Generator ===")
     print(f"Idea   : {idea}")
     print(f"Style  : {style_name}")
+    print(f"Mode   : {'fun' if fun else 'noir'}")
     print(f"Text   : {cfg.openai.text_model}")
     print(f"Images : {cfg.providers.active_image_provider}")
     print()
 
     # Step 1 — plot
     print("[1/3] Generating plot...")
-    plot = plot_agent.run(idea, style_suffix, cfg, style_name=style_name)
+    plot = plot_agent.run(idea, style_suffix, cfg, style_name=style_name, fun=fun)
     print(f"      Title     : {plot.title}")
     print(f"      Tagline   : {plot.tagline}")
     print(f"      Panels    : {plot.panel_count}")
@@ -127,10 +128,16 @@ def main() -> None:
         default="config.yml",
         help="Path to config YAML file. Default: config.yml",
     )
+    parser.add_argument(
+        "--fun",
+        action="store_true",
+        default=False,
+        help="Switch to fun/comedy mode instead of horror/noir.",
+    )
     args = parser.parse_args()
 
     try:
-        asyncio.run(run_pipeline(args.idea, args.style, Path(args.config)))
+        asyncio.run(run_pipeline(args.idea, args.style, Path(args.config), fun=args.fun))
     except (FileNotFoundError, ValueError) as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
