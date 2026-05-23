@@ -46,7 +46,13 @@ Options:
 ```
 --idea    Your story premise (required)
 --style   Comic style to use — matches a file in Styles/<name>.md (default: dylan-dog)
+--fun     Switch to absurdist/comedy mode instead of horror/noir
 --config  Path to config YAML (default: config.yml)
+```
+
+Example in fun mode:
+```bash
+python -m src.main --idea "A pigeon runs for mayor of New York City and actually wins" --fun
 ```
 
 ## Comic styles
