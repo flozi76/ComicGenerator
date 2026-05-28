@@ -39,7 +39,7 @@ def compose(
     scenes: list[SceneResult],
     output_dir: Path,
     cfg: CompositorConfig,
-) -> Path:
+) -> list[Path]:
     scene_by_index = {s.index: s for s in scenes}
     layout = plot.layout
 
@@ -48,37 +48,41 @@ def compose(
     gap = cfg.gap_px
     margin = cfg.margin_px
 
-    canvas = Image.new("L", (canvas_w, canvas_h), color=0)  # black background
+    out_paths = []
+    for page_num, page in enumerate(layout.pages, start=1):
+        canvas = Image.new("L", (canvas_w, canvas_h), color=0)
 
-    row_heights = _distribute(
-        canvas_h - 2 * margin,
-        [r.height_weight for r in layout.rows],
-        gap,
-    )
-
-    y = margin
-    for row, row_h in zip(layout.rows, row_heights):
-        panel_widths = _distribute(
-            canvas_w - 2 * margin,
-            [p.weight for p in row.panels],
+        row_heights = _distribute(
+            canvas_h - 2 * margin,
+            [r.height_weight for r in page.rows],
             gap,
         )
 
-        x = margin
-        for panel_spec, panel_w in zip(row.panels, panel_widths):
-            scene = scene_by_index.get(panel_spec.panel_index)
+        y = margin
+        for row, row_h in zip(page.rows, row_heights):
+            panel_widths = _distribute(
+                canvas_w - 2 * margin,
+                [p.weight for p in row.panels],
+                gap,
+            )
 
-            if scene and scene.image_path.exists():
-                img = Image.open(scene.image_path).convert("L")
-                panel_img = _letterbox(img, panel_w, row_h)
-            else:
-                panel_img = Image.new("L", (panel_w, row_h), color=30)
+            x = margin
+            for panel_spec, panel_w in zip(row.panels, panel_widths):
+                scene = scene_by_index.get(panel_spec.panel_index)
 
-            canvas.paste(panel_img, (x, y))
-            x += panel_w + gap
+                if scene and scene.image_path.exists():
+                    img = Image.open(scene.image_path).convert("L")
+                    panel_img = _letterbox(img, panel_w, row_h)
+                else:
+                    panel_img = Image.new("L", (panel_w, row_h), color=30)
 
-        y += row_h + gap
+                canvas.paste(panel_img, (x, y))
+                x += panel_w + gap
 
-    out_path = output_dir / "comic.png"
-    canvas.save(out_path, format="PNG", optimize=True)
-    return out_path
+            y += row_h + gap
+
+        out_path = output_dir / f"comic-{page_num:03d}.png"
+        canvas.save(out_path, format="PNG", optimize=True)
+        out_paths.append(out_path)
+
+    return out_paths

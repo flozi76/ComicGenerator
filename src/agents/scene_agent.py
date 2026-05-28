@@ -87,9 +87,11 @@ async def run(
     async with semaphore:
         image_bytes = await image_client.generate(full_prompt)
 
-    image_path = output_dir / f"scene_{beat.index + 1:02d}.png"
+    panels_dir = output_dir / "panels"
+    panels_dir.mkdir(exist_ok=True)
+    image_path = panels_dir / f"scene_{beat.index + 1:02d}.png"
     image_path.write_bytes(image_bytes)
-    print(f"  [scene {beat.index + 1:02d}] Done → {image_path.name}")
+    print(f"  [scene {beat.index + 1:02d}] Done → panels/{image_path.name}")
 
     return SceneResult(
         index=beat.index,
