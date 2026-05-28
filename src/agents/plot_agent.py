@@ -121,9 +121,14 @@ class Row:
 
 
 @dataclass
+class Page:
+    rows: list[Row]
+
+
+@dataclass
 class Layout:
     type: str
-    rows: list[Row]
+    pages: list[Page]
 
 
 @dataclass
@@ -145,39 +150,61 @@ class PlotResult:
             "style": self.style,
             "layout": {
                 "type": self.layout.type,
-                "rows": [
+                "pages": [
                     {
-                        "height_weight": row.height_weight,
-                        "panels": [
-                            {"panel_index": p.panel_index, "weight": p.weight}
-                            for p in row.panels
-                        ],
+                        "rows": [
+                            {
+                                "height_weight": row.height_weight,
+                                "panels": [
+                                    {"panel_index": p.panel_index, "weight": p.weight}
+                                    for p in row.panels
+                                ],
+                            }
+                            for row in page.rows
+                        ]
                     }
-                    for row in self.layout.rows
+                    for page in self.layout.pages
                 ],
             },
             "beats": [{"index": b.index, "beat": b.beat} for b in self.beats],
         }
 
 
-def _parse_and_validate(data: dict, style: str) -> PlotResult:
-    import re
+def _parse_and_validate(data: dict, style: str, forced_panel_count: Optional[int] = None) -> PlotResult:
     from slugify import slugify
 
     panel_count = int(data["panel_count"])
-    if not (4 <= panel_count <= 12):
-        raise ValueError(f"panel_count {panel_count} is outside 4-12 range")
+    if forced_panel_count is not None:
+        if panel_count != forced_panel_count:
+            raise ValueError(
+                f"Model returned panel_count={panel_count} but --panels={forced_panel_count} was requested"
+            )
+    else:
+        if not (4 <= panel_count <= 12):
+            raise ValueError(f"panel_count {panel_count} is outside 4-12 range")
 
     layout_data = data["layout"]
-    rows = []
+
+    # Accept both new pages format and legacy rows-only format
+    if "pages" in layout_data:
+        pages_data = layout_data["pages"]
+    elif "rows" in layout_data:
+        pages_data = [{"rows": layout_data["rows"]}]
+    else:
+        raise ValueError("layout must have either 'pages' or 'rows'")
+
+    pages = []
     all_indices = []
-    for row_data in layout_data["rows"]:
-        panels = [
-            Panel(panel_index=p["panel_index"], weight=float(p["weight"]))
-            for p in row_data["panels"]
-        ]
-        rows.append(Row(height_weight=float(row_data["height_weight"]), panels=panels))
-        all_indices.extend(p.panel_index for p in panels)
+    for page_data in pages_data:
+        rows = []
+        for row_data in page_data["rows"]:
+            panels = [
+                Panel(panel_index=p["panel_index"], weight=float(p["weight"]))
+                for p in row_data["panels"]
+            ]
+            rows.append(Row(height_weight=float(row_data["height_weight"]), panels=panels))
+            all_indices.extend(p.panel_index for p in panels)
+        pages.append(Page(rows=rows))
 
     expected = set(range(panel_count))
     actual = set(all_indices)
