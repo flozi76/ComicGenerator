@@ -3,7 +3,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from src.agents.plot_agent import Beat, PlotResult, Row
+from src.agents.plot_agent import Beat, PlotResult
 from src.config import Config
 from src.models.image_client import ImageClient, ImageClientError
 from src.models.text_client import TextClient, TextClientError
@@ -32,19 +32,20 @@ class SceneResult:
 
 def _aspect_hint(beat_index: int, plot: PlotResult) -> str:
     """Prepend a composition hint based on the panel's aspect ratio in the layout."""
-    for row in plot.layout.rows:
-        for panel in row.panels:
-            if panel.panel_index == beat_index:
-                total_w = sum(p.weight for p in row.panels)
-                panel_w_ratio = panel.weight / total_w
-                row_total_h = sum(r.height_weight for r in plot.layout.rows)
-                row_h_ratio = row.height_weight / row_total_h
-                aspect = panel_w_ratio / row_h_ratio
-                if aspect < 0.6:
-                    return "Tall vertical composition. "
-                if aspect > 1.8:
-                    return "Wide horizontal panoramic composition. "
-                return ""
+    for page in plot.layout.pages:
+        for row in page.rows:
+            for panel in row.panels:
+                if panel.panel_index == beat_index:
+                    total_w = sum(p.weight for p in row.panels)
+                    panel_w_ratio = panel.weight / total_w
+                    row_total_h = sum(r.height_weight for r in page.rows)
+                    row_h_ratio = row.height_weight / row_total_h
+                    aspect = panel_w_ratio / row_h_ratio
+                    if aspect < 0.6:
+                        return "Tall vertical composition. "
+                    if aspect > 1.8:
+                        return "Wide horizontal panoramic composition. "
+                    return ""
     return ""
 
 
