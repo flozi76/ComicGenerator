@@ -7,6 +7,7 @@ import string
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 from src.agents import plot_agent, scene_agent
 from src.compositor import compose
@@ -24,7 +25,6 @@ def load_style(style_name: str) -> str:
         print(f"Warning: style file {style_file} not found — using no style suffix.")
         return ""
     text = style_file.read_text()
-    # Extract the content of the first ```...``` block after "Image Prompt Suffix"
     import re
     blocks = re.findall(r"```\n(.*?)```", text, re.DOTALL)
     if blocks:
@@ -42,7 +42,13 @@ def build_output_dir(base: Path, title_slug: str) -> Path:
     return folder
 
 
-async def run_pipeline(idea: str, style_name: str, cfg_path: Path, fun: bool = False) -> None:
+async def run_pipeline(
+    idea: str,
+    style_name: str,
+    cfg_path: Path,
+    fun: bool = False,
+    panel_count: Optional[int] = None,
+) -> None:
     cfg = load_config(cfg_path)
     style_suffix = load_style(style_name)
 
@@ -50,17 +56,20 @@ async def run_pipeline(idea: str, style_name: str, cfg_path: Path, fun: bool = F
     print(f"Idea   : {idea}")
     print(f"Style  : {style_name}")
     print(f"Mode   : {'fun' if fun else 'noir'}")
+    print(f"Panels : {panel_count if panel_count is not None else 'model decides (4-12)'}")
     print(f"Text   : {cfg.openai.text_model}")
     print(f"Images : {cfg.providers.active_image_provider}")
     print()
 
     # Step 1 — plot
     print("[1/3] Generating plot...")
-    plot = plot_agent.run(idea, style_suffix, cfg, style_name=style_name, fun=fun)
+    plot = plot_agent.run(
+        idea, style_suffix, cfg, style_name=style_name, fun=fun, panel_count=panel_count
+    )
     print(f"      Title     : {plot.title}")
     print(f"      Tagline   : {plot.tagline}")
     print(f"      Panels    : {plot.panel_count}")
-    print(f"      Layout    : {len(plot.layout.rows)} rows")
+    print(f"      Pages     : {len(plot.layout.pages)}")
 
     output_dir = build_output_dir(cfg.output_base_dir, plot.title_slug)
     print(f"      Output dir: {output_dir}")
@@ -101,17 +110,18 @@ async def run_pipeline(idea: str, style_name: str, cfg_path: Path, fun: bool = F
     print(f"      {len(scenes)} scenes generated, {failed} failed")
 
     # Step 3 — composite
-    print(f"\n[3/3] Compositing panels into comic.png...")
+    print(f"\n[3/3] Compositing panels into {len(plot.layout.pages)} page(s)...")
     scenes_sorted = sorted(scenes, key=lambda s: s.index)
-    comic_path = compose(plot, scenes_sorted, output_dir, cfg.compositor)
-    print(f"      Saved → {comic_path}")
+    comic_paths = compose(plot, scenes_sorted, output_dir, cfg.compositor)
+    for p in comic_paths:
+        print(f"      Saved → {p}")
 
     print(f"\nDone! Output folder: {output_dir}")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Generate a single-page noir/horror comic from a story idea."
+        description="Generate a noir/horror comic from a story idea."
     )
     parser.add_argument(
         "--idea",
@@ -121,7 +131,15 @@ def main() -> None:
     parser.add_argument(
         "--style",
         default="dylan-dog",
-        help="Style name (matches a file in Styles/<name>.md). Default: dylan-dog",
+        choices=["dylan-dog", "milo-manara"],
+        help="Visual style (default: dylan-dog).",
+    )
+    parser.add_argument(
+        "--panels",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Number of panels to generate (4-32). If not set, the model chooses (4-12).",
     )
     parser.add_argument(
         "--config",
@@ -136,8 +154,20 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    if args.panels is not None and not (4 <= args.panels <= 32):
+        print("Error: --panels must be between 4 and 32", file=sys.stderr)
+        sys.exit(1)
+
     try:
-        asyncio.run(run_pipeline(args.idea, args.style, Path(args.config), fun=args.fun))
+        asyncio.run(
+            run_pipeline(
+                args.idea,
+                args.style,
+                Path(args.config),
+                fun=args.fun,
+                panel_count=args.panels,
+            )
+        )
     except (FileNotFoundError, ValueError) as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
