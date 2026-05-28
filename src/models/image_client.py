@@ -60,19 +60,60 @@ class OpenAIImageClient(ImageClient):
 
 
 class FluxClient(ImageClient):
-    """Stub for Black Forest Labs Flux Pro. Wire up when switching providers."""
+    """Black Forest Labs Flux via the BFL REST API (async poll pattern)."""
+
+    _BASE = "https://api.bfl.ai/v1"
 
     def __init__(self, cfg: Config) -> None:
         self._api_key = cfg.black_forest_labs.api_key
-        self._model = cfg.black_forest_labs.model
+        self._model = cfg.black_forest_labs.model  # e.g. "flux-pro-1.1"
 
     async def generate(self, prompt: str) -> bytes:
-        # TODO: implement Flux Pro via httpx POST to https://api.bfl.ai/v1/image
-        # Docs: https://docs.bfl.ml/quick_start/
-        raise NotImplementedError(
-            "Flux client not yet implemented. "
-            "Set providers.active_image_provider: dall-e-3 in config.yml."
-        )
+        import asyncio
+        import httpx
+
+        headers = {
+            "x-key": self._api_key,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+
+        async with httpx.AsyncClient(timeout=120) as http:
+            # Submit generation task
+            resp = await http.post(
+                f"{self._BASE}/{self._model}",
+                headers=headers,
+                json={"prompt": prompt, "width": 1024, "height": 1024},
+            )
+            try:
+                resp.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                raise ImageClientError(f"Flux submit error ({self._model}): {e}") from e
+
+            task_id = resp.json()["id"]
+
+            # Poll until ready (max ~2 minutes)
+            for _ in range(60):
+                await asyncio.sleep(2)
+                poll = await http.get(
+                    f"{self._BASE}/get_result",
+                    headers=headers,
+                    params={"id": task_id},
+                )
+                poll.raise_for_status()
+                data = poll.json()
+                status = data.get("status", "")
+
+                if status == "Ready":
+                    image_url = data["result"]["sample"]
+                    img = await http.get(image_url, timeout=60)
+                    img.raise_for_status()
+                    return img.content
+
+                if status in ("Error", "Failed", "Content Moderated", "Request Moderated"):
+                    raise ImageClientError(f"Flux generation blocked/failed: status={status!r}")
+
+        raise ImageClientError("Flux generation timed out after 120 seconds.")
 
 
 def get_image_client(cfg: Config) -> ImageClient:
