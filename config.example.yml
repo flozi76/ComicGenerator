@@ -3,7 +3,7 @@
 providers:
   plot_provider: openai          # provider for plot generation:    openai | anthropic
   scene_provider: openai         # provider for scene descriptions: openai | anthropic
-  image_provider: openai         # provider for image generation:   openai | black_forest_labs
+  image_provider: openai         # provider for image generation:   openai | black_forest_labs | fal
 
 openai:
   api_key: ""                    # set your OpenAI key here (or in config.yml)
@@ -22,11 +22,27 @@ black_forest_labs:
   api_key: ""                    # required when image_provider is "black_forest_labs"
   image_model: flux-pro-1.1      # flux-pro-1.1 | flux-pro | flux-dev
 
+fal:
+  api_key: ""                    # required when image_provider is "fal" (get one at fal.ai/dashboard/keys)
+  image_model: fal-ai/flux/dev   # full fal path: fal-ai/flux/dev | fal-ai/flux/schnell | fal-ai/flux-pro/v1.1 | fal-ai/stable-diffusion-v35-large | fal-ai/bytedance/seedream/v4/text-to-image (~$0.03/img)
+  image_size: square_hd          # square_hd | square | portrait_4_3 | landscape_4_3 | portrait_16_9 | landscape_16_9 (seedream also: auto | auto_2K | auto_4K)
+  enable_safety_checker: false   # false = no NSFW filter (more permissive; avoids blacked-out images)
+
 compositor:
   canvas_width: 2400
   canvas_height: 3200
   gap_px: 8                      # gutter between panels
   margin_px: 24                  # outer page margin
+
+instagram:
+  enabled: false                 # true = ask "Publish to Instagram?" after generation
+  username: ""                   # your Instagram handle
+  password: ""                   # your Instagram password (login via instagrapi; requires `pip install instagrapi` and ffmpeg)
+  session_file: instagram_session.json  # cached login session (avoids re-login / checkpoint prompts)
+  seconds_per_page: 3            # how long each comic page is shown in the reel slideshow
+  publish_reel: true             # publish a slideshow reel of the page(s)
+  publish_story: true            # publish each page as a 9:16 story frame
+  caption: "{title}\n\n{tagline}"  # caption template; {title} and {tagline} are substituted
 
 output:
   base_dir: output               # relative to project root

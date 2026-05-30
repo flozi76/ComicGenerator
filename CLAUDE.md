@@ -50,10 +50,10 @@ DALL-E 3 often ignores "black and white" prompts and returns warm/sepia images. 
 `asyncio.Semaphore(cfg.openai.max_concurrent_images)` caps parallel image calls (default: 4) to stay within DALL-E 3's ~5 req/min limit on default API tiers. Adjust in `config.yml`.
 
 ### Provider / model selection
-`providers.{plot,scene,image}_provider` each name a **configured provider block** (`openai`, `anthropic`, `black_forest_labs`). The block then supplies the concrete `text_model` / `image_model` that actually runs. So `image_provider: openai` + `openai.image_model: dall-e-3` runs DALL·E 3; `image_provider: black_forest_labs` + `black_forest_labs.image_model: flux-pro-1.1` runs Flux. `get_text_client` / `get_image_client` map a provider name to the right client class; `Config.text_model_name()` / `Config.image_model_name()` resolve a provider name to its model string (used for the startup printout).
+`providers.{plot,scene,image}_provider` each name a **configured provider block** (`openai`, `anthropic`, `black_forest_labs`, `fal`). The block then supplies the concrete `text_model` / `image_model` that actually runs. So `image_provider: openai` + `openai.image_model: dall-e-3` runs DALL·E 3; `image_provider: black_forest_labs` + `black_forest_labs.image_model: flux-pro-1.1` runs Flux direct; `image_provider: fal` + `fal.image_model: fal-ai/flux/dev` runs Flux-dev (or SD3.5, Recraft, …) through the fal.ai aggregator. `get_text_client` / `get_image_client` map a provider name to the right client class; `Config.text_model_name()` / `Config.image_model_name()` resolve a provider name to its model string (used for the startup printout).
 
 ### Switching image providers
-`src/models/image_client.py` has an `ImageClient` ABC with `OpenAIImageClient` (active, supports `dall-e-3` and `gpt-image-*`) and `FluxClient` (stub). To switch to Flux: set `providers.image_provider: black_forest_labs` in `config.yml`, fill `black_forest_labs.api_key`, and implement `FluxClient.generate()`.
+`src/models/image_client.py` has an `ImageClient` ABC with `OpenAIImageClient` (supports `dall-e-3` and `gpt-image-*`), `FluxClient` (Black Forest Labs direct REST), and `FalClient` (fal.ai queue REST — active, works). To use fal: set `providers.image_provider: fal` in `config.yml`, fill `fal.api_key`, and set `fal.image_model` to a full fal model path. fal is the least-restrictive / cheapest route (`enable_safety_checker: false` disables the NSFW filter and the blacked-out images it produces); one `FalClient` serves any fal model — just change the path.
 
 ## Key files
 
@@ -80,7 +80,7 @@ Each `providers.*_provider` selects a provider block; that block owns the model:
 providers:
   plot_provider: openai             # openai | anthropic
   scene_provider: openai            # openai | anthropic
-  image_provider: openai            # openai | black_forest_labs
+  image_provider: openai            # openai | black_forest_labs | fal
 openai:
   api_key: ""                       # required
   text_model: gpt-4o                # gpt-4o | gpt-4o-mini
@@ -92,11 +92,25 @@ anthropic:
 black_forest_labs:
   api_key: ""
   image_model: flux-pro-1.1         # flux-pro-1.1 | flux-pro | flux-dev
+fal:
+  api_key: ""
+  image_model: fal-ai/flux/dev      # full fal path: fal-ai/flux/schnell | fal-ai/flux-pro/v1.1 | fal-ai/stable-diffusion-v35-large
+  image_size: square_hd             # square_hd | portrait_4_3 | landscape_16_9 | ...
+  enable_safety_checker: false      # false = no NSFW filter (permissive)
 compositor:
   canvas_width: 2400
   canvas_height: 3200
   gap_px: 8
   margin_px: 24
+instagram:
+  enabled: false                  # true = prompt to publish after generation
+  username: ""                    # Instagram handle
+  password: ""                    # Instagram password
+  session_file: instagram_session.json
+  seconds_per_page: 3             # reel slideshow duration per page
+  publish_reel: true
+  publish_story: true
+  caption: "{title}\n\n{tagline}" # template; {title} {tagline} substituted
 ```
 
 ## Adding a new comic style
