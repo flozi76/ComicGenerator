@@ -14,23 +14,7 @@ from src.compositor import compose
 from src.config import load_config
 from src.models.image_client import get_image_client
 from src.models.text_client import TextClient
-
-CONFIG_PATH = Path("config.yml")
-STYLES_DIR = Path("Styles")
-
-
-def load_style(style_name: str) -> str:
-    style_file = STYLES_DIR / f"{style_name}.md"
-    if not style_file.exists():
-        print(f"Warning: style file {style_file} not found — using no style suffix.")
-        return ""
-    text = style_file.read_text()
-    import re
-    blocks = re.findall(r"```\n(.*?)```", text, re.DOTALL)
-    if blocks:
-        # First code block is the style suffix, second is the hard constraint
-        return blocks[0].strip()
-    return ""
+from src.style import load_style
 
 
 def build_output_dir(base: Path, title_slug: str) -> Path:
@@ -50,7 +34,7 @@ async def run_pipeline(
     panel_count: Optional[int] = None,
 ) -> None:
     cfg = load_config(cfg_path)
-    style_suffix = load_style(style_name)
+    style_config = load_style(style_name)
 
     print(f"\n=== Comic Generator ===")
     print(f"Idea   : {idea}")
@@ -64,7 +48,7 @@ async def run_pipeline(
     # Step 1 — plot
     print("[1/3] Generating plot...")
     plot = plot_agent.run(
-        idea, style_suffix, cfg, style_name=style_name, fun=fun, panel_count=panel_count
+        idea, style_config, cfg, fun=fun, panel_count=panel_count
     )
     print(f"      Title     : {plot.title}")
     print(f"      Tagline   : {plot.tagline}")
@@ -92,7 +76,7 @@ async def run_pipeline(
             text_client=text_client,
             image_client=image_client,
             semaphore=semaphore,
-            style_suffix=style_suffix,
+            style_config=style_config,
         )
         for beat in plot.beats
     ]
