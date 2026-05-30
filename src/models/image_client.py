@@ -88,17 +88,19 @@ class FluxClient(ImageClient):
             try:
                 resp.raise_for_status()
             except httpx.HTTPStatusError as e:
+                if resp.status_code == 429:
+                    raise ImageClientError(f"Flux rate limit hit on submit — reduce max_concurrent_images in config.yml") from e
                 raise ImageClientError(f"Flux submit error ({self._model}): {e}") from e
 
-            task_id = resp.json()["id"]
+            submit_data = resp.json()
+            polling_url = submit_data["polling_url"]
 
             # Poll until ready (max ~2 minutes)
             for _ in range(60):
                 await asyncio.sleep(2)
                 poll = await http.get(
-                    f"{self._BASE}/get_result",
+                    polling_url,
                     headers=headers,
-                    params={"id": task_id},
                 )
                 poll.raise_for_status()
                 data = poll.json()

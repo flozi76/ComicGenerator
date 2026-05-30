@@ -17,7 +17,7 @@ def _letterbox(img: Image.Image, panel_w: int, panel_h: int) -> Image.Image:
     new_w = int(src_w * scale)
     new_h = int(src_h * scale)
     resized = img.resize((new_w, new_h), Image.LANCZOS)
-    panel = Image.new("L", (panel_w, panel_h), color=0)
+    panel = Image.new("RGB", (panel_w, panel_h), color=(0, 0, 0))
     x_off = (panel_w - new_w) // 2
     y_off = (panel_h - new_h) // 2
     panel.paste(resized, (x_off, y_off))
@@ -50,7 +50,7 @@ def compose(
 
     out_paths = []
     for page_num, page in enumerate(layout.pages, start=1):
-        canvas = Image.new("L", (canvas_w, canvas_h), color=0)
+        canvas = Image.new("RGB", (canvas_w, canvas_h), color=(0, 0, 0))
 
         row_heights = _distribute(
             canvas_h - 2 * margin,
@@ -71,10 +71,10 @@ def compose(
                 scene = scene_by_index.get(panel_spec.panel_index)
 
                 if scene and scene.image_path.exists():
-                    img = Image.open(scene.image_path).convert("L")
+                    img = Image.open(scene.image_path).convert("RGB")
                     panel_img = _letterbox(img, panel_w, row_h)
                 else:
-                    panel_img = Image.new("L", (panel_w, row_h), color=30)
+                    panel_img = Image.new("RGB", (panel_w, row_h), color=(30, 30, 30))
 
                 canvas.paste(panel_img, (x, y))
                 x += panel_w + gap

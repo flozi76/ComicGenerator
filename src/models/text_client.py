@@ -13,7 +13,7 @@ class TextClient:
         self._model = cfg.text_model
         self._client = AsyncOpenAI(api_key=cfg.api_key)
 
-    async def chat(self, system: str, user: str, max_tokens: int = 2000) -> str:
+    async def chat(self, system: str, user: str, max_tokens: int = 8000) -> str:
         try:
             response = await self._client.chat.completions.create(
                 model=self._model,
@@ -27,7 +27,7 @@ class TextClient:
             raise TextClientError(f"OpenAI text API error: {e}") from e
         return response.choices[0].message.content or ""
 
-    async def chat_json(self, system: str, user: str, max_tokens: int = 2000) -> dict:
+    async def chat_json(self, system: str, user: str, max_tokens: int = 8000) -> dict:
         raw = await self.chat(system, user, max_tokens)
         clean = re.sub(r"```(?:json)?|```", "", raw).strip()
         # GPT-4o sometimes emits trailing commas — strip them before parsing

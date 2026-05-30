@@ -81,6 +81,7 @@ The visual style is defined in `Styles/<name>.md`. Each file contains the image 
 |-------|-------------|
 | `dylan-dog` | Italian noir — black & white pen-and-ink, heavy crosshatching, gothic London atmosphere, dramatic chiaroscuro |
 | `milo-manara` | Italian fumetti — fluid elegant linework, warm luminous tones, Mediterranean and mythological settings |
+| `anime` | Classic 80s–90s anime — cel-shaded color, neon-lit cyberpunk dystopia, cinematic angles, Otomo/Shirow aesthetic |
 
 To add a new style, create `Styles/my-style.md` and run with `--style my-style`.
 

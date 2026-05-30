@@ -131,7 +131,7 @@ def main() -> None:
     parser.add_argument(
         "--style",
         default="dylan-dog",
-        choices=["dylan-dog", "milo-manara"],
+        choices=["dylan-dog", "milo-manara", "anime"],
         help="Visual style (default: dylan-dog).",
     )
     parser.add_argument(
