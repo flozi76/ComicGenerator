@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Optional
 from openai import OpenAI
 from src.config import Config
+from src.style import StyleConfig
 
 
 LAYOUT_SCHEMA_EXAMPLE = """
@@ -43,14 +44,13 @@ LAYOUT SCHEMA — the weighted multi-page system:
 Layout example for 4 panels on a single page (splash + 3-grid):
 {LAYOUT_SCHEMA_EXAMPLE}"""
 
-PLOT_SYSTEM_PROMPT = f"""You are a horror/noir comic book director. Given a story idea and a visual style description, create a comic outline.
-
+_PLOT_SYSTEM_STRUCTURE = """
 Respond ONLY with a single compact JSON object — no markdown fences, no explanation.
 
 The JSON must have exactly these fields:
 {{
   "title": "short punchy story title",
-  "tagline": "one dark sentence — the hook",
+  "tagline": "one sentence — the hook",
   "panel_count": <integer — see instruction in user message>,
   "layout": <layout object — see schema below>,
   "beats": [
@@ -59,48 +59,15 @@ The JSON must have exactly these fields:
   ]
 }}
 
-{_LAYOUT_SCHEMA_DESCRIPTION}
-
-Layout guidance:
-- Open each page with a large splash panel (height_weight 1.5-2.0) for atmosphere
-- Use tight 3-panel rows for rapid dialogue or action sequences
-- Reserve a wide single-panel row for key horror reveals
-- End with a quieter 2-panel row — one close-up, one establishing shot
-- Match layout pacing to the story's rhythm
+{layout_schema}
 
 beats must have exactly panel_count items, indexed 0 to panel_count-1.
-Each beat is ONE short sentence. Be concise and dark.
+Each beat is ONE short sentence.
 """
 
-FUN_PLOT_SYSTEM_PROMPT = f"""You are a comedic comic book director with a flair for absurdist humour and slapstick chaos. Given a story idea and a visual style description, create a comic outline that is silly, unexpected, and fun.
 
-Respond ONLY with a single compact JSON object — no markdown fences, no explanation.
-
-The JSON must have exactly these fields:
-{{
-  "title": "short punchy comedic title",
-  "tagline": "one ridiculous sentence — the joke hook",
-  "panel_count": <integer — see instruction in user message>,
-  "layout": <layout object — see schema below>,
-  "beats": [
-    {{"index": 0, "beat": "one short sentence describing what happens in this scene"}},
-    ...
-  ]
-}}
-
-{_LAYOUT_SCHEMA_DESCRIPTION}
-
-Layout guidance:
-- Open each page with a large, ridiculous establishing panel (height_weight 1.5-2.0) that sets the absurd premise
-- Use rapid-fire 3-panel rows for escalating chaos or comedic timing (setup / escalation / punchline)
-- Use a single wide panel for the biggest gag or visual joke
-- End on a funny twist or deadpan reaction shot
-- Match layout pacing to comedic rhythm — fast beats for slapstick, slow beats for the punchline
-
-beats must have exactly panel_count items, indexed 0 to panel_count-1.
-Each beat is ONE short sentence. Lean into absurdity, misunderstandings, escalating chaos, and comic irony.
-Avoid darkness; favour the ridiculous.
-"""
+def _build_plot_system_prompt(persona: str) -> str:
+    return f"{persona}\n{_PLOT_SYSTEM_STRUCTURE.format(layout_schema=_LAYOUT_SCHEMA_DESCRIPTION)}"
 
 
 @dataclass
@@ -237,15 +204,15 @@ def _parse_and_validate(data: dict, style: str, forced_panel_count: Optional[int
 
 def run(
     idea: str,
-    style_prompt: str,
+    style_config: StyleConfig,
     cfg: Config,
-    style_name: str = "dylan-dog",
     fun: bool = False,
     panel_count: Optional[int] = None,
 ) -> PlotResult:
     import re
     client = OpenAI(api_key=cfg.openai.api_key)
-    system_prompt = FUN_PLOT_SYSTEM_PROMPT if fun else PLOT_SYSTEM_PROMPT
+    persona = style_config.fun_plot_persona if fun else style_config.plot_persona
+    system_prompt = _build_plot_system_prompt(persona)
 
     if panel_count is not None:
         approx_pages = max(1, (panel_count + 7) // 8)
@@ -259,7 +226,7 @@ def run(
     else:
         panel_instruction = "\nChoose panel_count as an integer between 4 and 12 to best fit the story pacing. Use a single page."
 
-    user_msg = f"Style:\n{style_prompt}\n\nStory idea:\n{idea}{panel_instruction}"
+    user_msg = f"Story idea:\n{idea}{panel_instruction}"
 
     last_error = None
     for attempt in range(2):
@@ -275,7 +242,7 @@ def run(
         clean = re.sub(r"```(?:json)?|```", "", raw).strip()
         try:
             data = json.loads(clean)
-            return _parse_and_validate(data, style=style_name, forced_panel_count=panel_count)
+            return _parse_and_validate(data, style=style_config.name, forced_panel_count=panel_count)
         except (json.JSONDecodeError, ValueError, KeyError) as e:
             last_error = e
             print(f"  [plot_agent] Attempt {attempt + 1} failed: {e} — retrying...")
