@@ -125,12 +125,90 @@ class FluxClient(ImageClient):
         raise ImageClientError("Flux generation timed out after 120 seconds.")
 
 
+class FalClient(ImageClient):
+    """fal.ai aggregator via the queue REST API (async submit + poll).
+
+    `image_model` is the full fal model path, e.g. 'fal-ai/flux/dev',
+    'fal-ai/flux-pro/v1.1', or 'fal-ai/stable-diffusion-v35-large'. One client
+    serves any of them — just change the path in config.
+    """
+
+    _BASE = "https://queue.fal.run"
+
+    def __init__(self, cfg: Config) -> None:
+        self._api_key = cfg.fal.api_key
+        self._model = cfg.fal.image_model
+        self._image_size = cfg.fal.image_size
+        self._safety = cfg.fal.enable_safety_checker
+
+    async def generate(self, prompt: str) -> bytes:
+        import asyncio
+        import httpx
+
+        headers = {
+            "Authorization": f"Key {self._api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "prompt": prompt,
+            "image_size": self._image_size,
+            "num_images": 1,
+            "enable_safety_checker": self._safety,
+        }
+
+        async with httpx.AsyncClient(timeout=120) as http:
+            # Submit to the queue
+            resp = await http.post(
+                f"{self._BASE}/{self._model}",
+                headers=headers,
+                json=payload,
+            )
+            try:
+                resp.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                if resp.status_code == 429:
+                    raise ImageClientError(
+                        "fal rate limit hit on submit — reduce max_concurrent_images in config.yml"
+                    ) from e
+                raise ImageClientError(f"fal submit error ({self._model}): {e} — {resp.text}") from e
+
+            submit = resp.json()
+            status_url = submit["status_url"]
+            response_url = submit["response_url"]
+
+            # Poll status until COMPLETED (max ~2 minutes)
+            for _ in range(60):
+                await asyncio.sleep(2)
+                poll = await http.get(status_url, headers=headers)
+                poll.raise_for_status()
+                status = poll.json().get("status", "")
+
+                if status == "COMPLETED":
+                    result = await http.get(response_url, headers=headers)
+                    result.raise_for_status()
+                    data = result.json()
+                    images = data.get("images") or []
+                    if not images:
+                        raise ImageClientError(f"fal returned no images: {data}")
+                    image_url = images[0]["url"]
+                    img = await http.get(image_url, timeout=60)
+                    img.raise_for_status()
+                    return img.content
+
+                if status not in ("IN_QUEUE", "IN_PROGRESS"):
+                    raise ImageClientError(f"fal generation failed: status={status!r} — {poll.text}")
+
+        raise ImageClientError("fal generation timed out after 120 seconds.")
+
+
 def get_image_client(cfg: Config) -> ImageClient:
     provider = cfg.providers.image_provider
     if provider == "openai":
         return OpenAIImageClient(cfg)
     if provider == "black_forest_labs":
         return FluxClient(cfg)
+    if provider == "fal":
+        return FalClient(cfg)
     raise ValueError(
-        f"Unknown image provider: {provider!r}. Choose 'openai' or 'black_forest_labs'."
+        f"Unknown image provider: {provider!r}. Choose 'openai', 'black_forest_labs', or 'fal'."
     )

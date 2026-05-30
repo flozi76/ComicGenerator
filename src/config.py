@@ -86,6 +86,8 @@ class Config:
             return self.openai.image_model
         if provider == "black_forest_labs":
             return self.black_forest_labs.image_model
+        if provider == "fal":
+            return self.fal.image_model
         return provider
 
 
@@ -157,12 +159,17 @@ def load_config(path: Path = Path("config.yml")) -> Config:
     if providers.image_provider == "black_forest_labs":
         if not bfl.api_key:
             raise ValueError("black_forest_labs.api_key is required when using the black_forest_labs image provider.")
+    if providers.image_provider == "fal":
+        if not fal.api_key:
+            raise ValueError("fal.api_key is required when using the fal image provider.")
 
     return Config(
         providers=providers,
         openai=openai_cfg,
         anthropic=anthropic,
         black_forest_labs=bfl,
+        fal=fal,
         compositor=compositor,
+        instagram=instagram,
         output_base_dir=output_base_dir,
     )
