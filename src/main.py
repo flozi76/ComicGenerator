@@ -14,7 +14,15 @@ from src.compositor import compose
 from src.config import load_config
 from src.models.image_client import get_image_client
 from src.models.text_client import get_text_client
-from src.style import load_style
+from src.publisher import publish_to_instagram
+from src.style import STYLES_DIR, load_style
+
+
+def available_styles() -> list[str]:
+    """Discover style names from the styles directory (filenames without .md)."""
+    if not STYLES_DIR.exists():
+        return []
+    return sorted(p.stem for p in STYLES_DIR.glob("*.md"))
 
 
 def build_output_dir(base: Path, title_slug: str) -> Path:
@@ -114,10 +122,11 @@ def main() -> None:
         required=True,
         help="The story idea or premise for the comic.",
     )
+    styles = available_styles()
     parser.add_argument(
         "--style",
         default="dylan-dog",
-        choices=["dylan-dog", "milo-manara", "anime"],
+        choices=styles or None,
         help="Visual style (default: dylan-dog).",
     )
     parser.add_argument(
