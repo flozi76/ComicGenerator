@@ -34,12 +34,24 @@ def build_output_dir(base: Path, title_slug: str) -> Path:
     return folder
 
 
+def _confirm_publish() -> bool:
+    """Ask whether to publish to Instagram. Non-interactive stdin → no."""
+    if not sys.stdin.isatty():
+        return False
+    try:
+        answer = input("\nPublish to Instagram as reel + story? [y/N]: ").strip().lower()
+    except EOFError:
+        return False
+    return answer in ("y", "yes")
+
+
 async def run_pipeline(
     idea: str,
     style_name: str,
     cfg_path: Path,
     fun: bool = False,
     panel_count: Optional[int] = None,
+    publish: Optional[bool] = None,
 ) -> None:
     cfg = load_config(cfg_path)
     style_config = load_style(style_name)
@@ -112,6 +124,21 @@ async def run_pipeline(
 
     print(f"\nDone! Output folder: {output_dir}")
 
+    # Step 4 — optional Instagram publishing
+    # `publish` overrides the prompt: True/False from CLI flags, None = ask.
+    if publish is None:
+        do_publish = cfg.instagram.enabled and _confirm_publish()
+    else:
+        do_publish = publish
+
+    if do_publish:
+        print("\n[4/4] Publishing to Instagram...")
+        try:
+            publish_to_instagram(plot, comic_paths, output_dir, cfg.instagram)
+            print("      Published to Instagram.")
+        except Exception as e:
+            print(f"      Instagram publishing failed: {e}", file=sys.stderr)
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(
@@ -147,6 +174,20 @@ def main() -> None:
         default=False,
         help="Switch to fun/comedy mode instead of horror/noir.",
     )
+    publish_group = parser.add_mutually_exclusive_group()
+    publish_group.add_argument(
+        "--publish",
+        dest="publish",
+        action="store_true",
+        default=None,
+        help="Publish to Instagram without prompting (reel + story).",
+    )
+    publish_group.add_argument(
+        "--no-publish",
+        dest="publish",
+        action="store_false",
+        help="Skip Instagram publishing without prompting.",
+    )
     args = parser.parse_args()
 
     if args.panels is not None and not (4 <= args.panels <= 32):
@@ -161,6 +202,7 @@ def main() -> None:
                 Path(args.config),
                 fun=args.fun,
                 panel_count=args.panels,
+                publish=args.publish,
             )
         )
     except (FileNotFoundError, ValueError) as e:
