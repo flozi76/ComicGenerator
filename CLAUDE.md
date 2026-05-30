@@ -8,6 +8,7 @@ A Python console application that generates a single-page noir/horror comic from
 1. **Plot agent** (sync): GPT-4o generates title, tagline, panel count (4–12), page layout, and scene beats
 2. **Scene agents** (async, parallel): one coroutine per scene expands a beat into caption + image prompt, then generates a DALL-E 3 image
 3. **Compositor**: Pillow stitches all panel images into one greyscale `comic.png`
+4. **Publisher** (optional): after generation, offers to publish the page(s) to Instagram as a slideshow **reel** + **story** frames via `instagrapi`
 
 `Idea/noir-comic-generator.jsx` is a React prototype for reference — it is not used by the Python app.
 
@@ -29,6 +30,18 @@ python -m src.main --idea "..." --style dylan-dog
 
 # With a different config path
 python -m src.main --idea "..." --config /path/to/config.yml
+
+# Auto-publish to Instagram (skip the prompt) / never publish
+python -m src.main --idea "..." --publish
+python -m src.main --idea "..." --no-publish
+```
+
+Instagram publishing needs `instagrapi` (in `requirements.txt`) and ffmpeg for the reel video (`brew install ffmpeg`, or it falls back to the binary bundled with `imageio-ffmpeg`). Fill `instagram.username` / `instagram.password` in `config.yml` and set `instagram.enabled: true` to be prompted after generation.
+
+**First login:** Instagram challenges a login from a new device/IP with a verification code (email/SMS). Run the login helper once **from a real terminal** so you can type the code; it caches the session so later runs publish without prompting:
+
+```bash
+python3 scripts/instagram_login.py
 ```
 
 Output is written to `output/<YYYY-MM-DD>/story_<HHmmss>_<slug>_<rand>/` containing `plot.json`, `scene_NN.png` files, and `comic.png`.
@@ -37,8 +50,11 @@ Output is written to `output/<YYYY-MM-DD>/story_<HHmmss>_<slug>_<rand>/` contain
 
 ### Pipeline flow (`src/main.py`)
 ```
-load_config() → plot_agent.run() → [asyncio.gather(scene_agent.run() × N)] → compositor.compose()
+load_config() → plot_agent.run() → [asyncio.gather(scene_agent.run() × N)] → compositor.compose() → [publisher.publish_to_instagram()]
 ```
+
+### Instagram publishing (`src/publisher.py`)
+Optional final step. After compositing, `main.py` decides whether to publish: the `--publish`/`--no-publish` flags force the choice; otherwise, if `instagram.enabled` is true and stdin is a TTY, it prompts `Publish to Instagram as reel + story? [y/N]`. `publish_to_instagram()` logs in with `instagrapi` (caching the session to `instagram.session_file` to avoid re-login/checkpoints), then: (1) **reel** — `build_reel()` renders the page PNG(s) into a 9:16 `reel.mp4` slideshow via **ffmpeg** (concat demuxer, `seconds_per_page` each, padded on black) and `clip_upload`s it; (2) **story** — each page is letterboxed to 1080×1920 and pushed via `photo_upload_to_story`. `instagrapi` is imported lazily inside the function, so the rest of the app runs without it installed. Publishing failures are caught and printed — they never abort a successful generation.
 
 ### Layout system
 The plot agent asks GPT-4o to return a **weighted row layout** — a JSON structure where each row has a `height_weight` and each panel within a row has a `weight`. The compositor translates these weights into pixel dimensions using simple proportional arithmetic. The layout drives which scenes go where and at what aspect ratio.
@@ -64,8 +80,9 @@ DALL-E 3 often ignores "black and white" prompts and returns warm/sepia images. 
 | `src/agents/plot_agent.py` | Step 1 — sync GPT-4o call, returns `PlotResult` with layout |
 | `src/agents/scene_agent.py` | Step 2 — async coroutine, text + image per scene |
 | `src/compositor.py` | Step 3 — Pillow weighted-row compositor |
+| `src/publisher.py` | Step 4 (optional) — Instagram reel + story publishing via `instagrapi` + ffmpeg |
 | `src/models/text_client.py` | Thin async wrapper over `openai.AsyncOpenAI` with JSON parsing |
-| `src/models/image_client.py` | `ImageClient` ABC + `OpenAIImageClient` + `FluxClient` stub |
+| `src/models/image_client.py` | `ImageClient` ABC + `OpenAIImageClient` + `FluxClient` + `FalClient` |
 | `Styles/dylan-dog.md` | Style definition — image prompt suffix loaded at runtime |
 | `config.example.yml` | Config template (committed); copy to `config.yml` and add key |
 | `Decisions.md` | Design decision log |
