@@ -89,13 +89,21 @@ To add a new style, create `Styles/my-style.md` and run with `--style my-style`.
 
 When `--panels N` produces more than ~10 panels, the model splits them into pages of 4–10 panels each. Pages are composited independently and saved as `comic-001.png`, `comic-002.png`, etc. Individual panel images are always saved to the `panels/` subfolder.
 
-## Switching image models
+## Switching providers and models
 
-The pipeline is abstracted so you can switch image providers in `config.yml`:
+Each role picks a configured provider block, and the block supplies the actual model:
 
 ```yaml
 providers:
-  active_image_provider: dall-e-3   # or: flux (Black Forest Labs Flux Pro)
+  plot_provider: openai             # openai | anthropic
+  scene_provider: openai            # openai | anthropic
+  image_provider: openai            # openai | black_forest_labs
+
+openai:
+  text_model: gpt-4o                # gpt-4o | gpt-4o-mini
+  image_model: gpt-image-1          # gpt-image-1 | dall-e-3
+black_forest_labs:
+  image_model: flux-pro-1.1         # flux-pro-1.1 | flux-pro (requires api_key)
 ```
 
 See `Notes/image-model-research.md` for a comparison of available models.

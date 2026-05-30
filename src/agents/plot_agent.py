@@ -1,9 +1,8 @@
 import json
 from dataclasses import dataclass
 from typing import Optional
-from openai import OpenAI
-from src.config import Config
 from src.style import StyleConfig
+from src.models.text_client import TextClient
 
 
 LAYOUT_SCHEMA_EXAMPLE = """
@@ -202,15 +201,14 @@ def _parse_and_validate(data: dict, style: str, forced_panel_count: Optional[int
     )
 
 
-def run(
+async def run(
     idea: str,
     style_config: StyleConfig,
-    cfg: Config,
+    text_client: TextClient,
     fun: bool = False,
     panel_count: Optional[int] = None,
 ) -> PlotResult:
     import re
-    client = OpenAI(api_key=cfg.openai.api_key)
     persona = style_config.fun_plot_persona if fun else style_config.plot_persona
     system_prompt = _build_plot_system_prompt(persona)
 
@@ -230,17 +228,9 @@ def run(
 
     last_error = None
     for attempt in range(2):
-        response = client.chat.completions.create(
-            model=cfg.openai.text_model,
-            max_tokens=2000,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_msg},
-            ],
-        )
-        raw = response.choices[0].message.content or ""
-        clean = re.sub(r"```(?:json)?|```", "", raw).strip()
         try:
+            raw = await text_client.chat(system_prompt, user_msg, max_tokens=2000)
+            clean = re.sub(r"```(?:json)?|```", "", raw).strip()
             data = json.loads(clean)
             return _parse_and_validate(data, style=style_config.name, forced_panel_count=panel_count)
         except (json.JSONDecodeError, ValueError, KeyError) as e:

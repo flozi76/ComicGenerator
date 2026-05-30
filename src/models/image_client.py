@@ -21,11 +21,17 @@ class OpenAIImageClient(ImageClient):
         self._model = cfg.openai.image_model
         self._size = cfg.openai.image_size
         self._quality = cfg.openai.image_quality
+        self._moderation = cfg.openai.image_moderation
 
     async def generate(self, prompt: str) -> bytes:
         import asyncio
         import base64
         import httpx
+
+        # `moderation` is a gpt-image-* parameter; older models don't accept it.
+        extra = {}
+        if self._model.startswith("gpt-image"):
+            extra["moderation"] = self._moderation
 
         max_retries = 4
         for attempt in range(max_retries):
@@ -36,6 +42,7 @@ class OpenAIImageClient(ImageClient):
                     n=1,
                     size=self._size,
                     quality=self._quality,
+                    **extra,
                 )
             except Exception as e:
                 msg = str(e)
@@ -66,7 +73,7 @@ class FluxClient(ImageClient):
 
     def __init__(self, cfg: Config) -> None:
         self._api_key = cfg.black_forest_labs.api_key
-        self._model = cfg.black_forest_labs.model  # e.g. "flux-pro-1.1"
+        self._model = cfg.black_forest_labs.image_model  # e.g. "flux-pro-1.1"
 
     async def generate(self, prompt: str) -> bytes:
         import asyncio
@@ -119,9 +126,11 @@ class FluxClient(ImageClient):
 
 
 def get_image_client(cfg: Config) -> ImageClient:
-    provider = cfg.providers.active_image_provider
-    if provider in ("dall-e-3", "openai"):
+    provider = cfg.providers.image_provider
+    if provider == "openai":
         return OpenAIImageClient(cfg)
-    if provider == "flux":
+    if provider == "black_forest_labs":
         return FluxClient(cfg)
-    raise ValueError(f"Unknown image provider: {provider!r}. Choose 'dall-e-3', 'openai', or 'flux'.")
+    raise ValueError(
+        f"Unknown image provider: {provider!r}. Choose 'openai' or 'black_forest_labs'."
+    )

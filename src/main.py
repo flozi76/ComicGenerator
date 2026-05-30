@@ -13,7 +13,7 @@ from src.agents import plot_agent, scene_agent
 from src.compositor import compose
 from src.config import load_config
 from src.models.image_client import get_image_client
-from src.models.text_client import TextClient
+from src.models.text_client import get_text_client
 from src.style import load_style
 
 
@@ -35,20 +35,24 @@ async def run_pipeline(
 ) -> None:
     cfg = load_config(cfg_path)
     style_config = load_style(style_name)
+    plot_client = get_text_client(cfg.providers.plot_provider, cfg)
+    scene_client = get_text_client(cfg.providers.scene_provider, cfg)
+    image_client = get_image_client(cfg)
 
     print(f"\n=== Comic Generator ===")
     print(f"Idea   : {idea}")
     print(f"Style  : {style_name}")
     print(f"Mode   : {'fun' if fun else 'noir'}")
     print(f"Panels : {panel_count if panel_count is not None else 'model decides (4-12)'}")
-    print(f"Text   : {cfg.openai.text_model}")
-    print(f"Images : {cfg.providers.active_image_provider}")
+    print(f"Plot   : {cfg.providers.plot_provider} ({cfg.text_model_name(cfg.providers.plot_provider)})")
+    print(f"Scene  : {cfg.providers.scene_provider} ({cfg.text_model_name(cfg.providers.scene_provider)})")
+    print(f"Images : {cfg.providers.image_provider} ({cfg.image_model_name(cfg.providers.image_provider)})")
     print()
 
     # Step 1 — plot
     print("[1/3] Generating plot...")
-    plot = plot_agent.run(
-        idea, style_config, cfg, fun=fun, panel_count=panel_count
+    plot = await plot_agent.run(
+        idea, style_config, plot_client, fun=fun, panel_count=panel_count
     )
     print(f"      Title     : {plot.title}")
     print(f"      Tagline   : {plot.tagline}")
@@ -63,8 +67,6 @@ async def run_pipeline(
 
     # Step 2 — scenes (parallel)
     print(f"\n[2/3] Generating {plot.panel_count} scenes in parallel...")
-    text_client = TextClient(cfg.openai)
-    image_client = get_image_client(cfg)
     semaphore = asyncio.Semaphore(cfg.openai.max_concurrent_images)
 
     tasks = [
@@ -73,7 +75,7 @@ async def run_pipeline(
             plot=plot,
             cfg=cfg,
             output_dir=output_dir,
-            text_client=text_client,
+            text_client=scene_client,
             image_client=image_client,
             semaphore=semaphore,
             style_config=style_config,

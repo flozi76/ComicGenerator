@@ -49,8 +49,11 @@ DALL-E 3 often ignores "black and white" prompts and returns warm/sepia images. 
 ### Rate limiting
 `asyncio.Semaphore(cfg.openai.max_concurrent_images)` caps parallel image calls (default: 4) to stay within DALL-E 3's ~5 req/min limit on default API tiers. Adjust in `config.yml`.
 
+### Provider / model selection
+`providers.{plot,scene,image}_provider` each name a **configured provider block** (`openai`, `anthropic`, `black_forest_labs`). The block then supplies the concrete `text_model` / `image_model` that actually runs. So `image_provider: openai` + `openai.image_model: dall-e-3` runs DALL·E 3; `image_provider: black_forest_labs` + `black_forest_labs.image_model: flux-pro-1.1` runs Flux. `get_text_client` / `get_image_client` map a provider name to the right client class; `Config.text_model_name()` / `Config.image_model_name()` resolve a provider name to its model string (used for the startup printout).
+
 ### Switching image providers
-`src/models/image_client.py` has an `ImageClient` ABC with `DallE3Client` (active) and `FluxClient` (stub). To switch: set `providers.active_image_provider: flux` in `config.yml` and implement `FluxClient.generate()`.
+`src/models/image_client.py` has an `ImageClient` ABC with `OpenAIImageClient` (active, supports `dall-e-3` and `gpt-image-*`) and `FluxClient` (stub). To switch to Flux: set `providers.image_provider: black_forest_labs` in `config.yml`, fill `black_forest_labs.api_key`, and implement `FluxClient.generate()`.
 
 ## Key files
 
@@ -62,7 +65,7 @@ DALL-E 3 often ignores "black and white" prompts and returns warm/sepia images. 
 | `src/agents/scene_agent.py` | Step 2 — async coroutine, text + image per scene |
 | `src/compositor.py` | Step 3 — Pillow weighted-row compositor |
 | `src/models/text_client.py` | Thin async wrapper over `openai.AsyncOpenAI` with JSON parsing |
-| `src/models/image_client.py` | `ImageClient` ABC + `DallE3Client` + `FluxClient` stub |
+| `src/models/image_client.py` | `ImageClient` ABC + `OpenAIImageClient` + `FluxClient` stub |
 | `Styles/dylan-dog.md` | Style definition — image prompt suffix loaded at runtime |
 | `config.example.yml` | Config template (committed); copy to `config.yml` and add key |
 | `Decisions.md` | Design decision log |
@@ -71,12 +74,24 @@ DALL-E 3 often ignores "black and white" prompts and returns warm/sepia images. 
 
 ## Config structure
 
+Each `providers.*_provider` selects a provider block; that block owns the model:
+
 ```yaml
 providers:
-  active_image_provider: dall-e-3   # or: flux
+  plot_provider: openai             # openai | anthropic
+  scene_provider: openai            # openai | anthropic
+  image_provider: openai            # openai | black_forest_labs
 openai:
-  api_key: ""                        # required
+  api_key: ""                       # required
+  text_model: gpt-4o                # gpt-4o | gpt-4o-mini
+  image_model: gpt-image-1          # gpt-image-1 | dall-e-3
   max_concurrent_images: 4          # semaphore limit for parallel image calls
+anthropic:
+  api_key: ""
+  text_model: claude-sonnet-4-6     # claude-opus-4-8 | claude-sonnet-4-6
+black_forest_labs:
+  api_key: ""
+  image_model: flux-pro-1.1         # flux-pro-1.1 | flux-pro | flux-dev
 compositor:
   canvas_width: 2400
   canvas_height: 3200

@@ -7,21 +7,23 @@ import yaml
 class OpenAIConfig:
     api_key: str
     text_model: str = "gpt-4o"
-    image_model: str = "dall-e-3"
+    image_model: str = "gpt-image-1"
     image_size: str = "1024x1024"
     image_quality: str = "standard"
+    image_moderation: str = "auto"  # gpt-image-* only: "auto" | "low"
     max_concurrent_images: int = 4
 
 
 @dataclass
 class AnthropicConfig:
     api_key: str = ""
+    text_model: str = "claude-sonnet-4-6"
 
 
 @dataclass
 class BlackForestLabsConfig:
     api_key: str = ""
-    model: str = "flux-pro"
+    image_model: str = "flux-pro-1.1"
 
 
 @dataclass
@@ -34,8 +36,9 @@ class CompositorConfig:
 
 @dataclass
 class ProvidersConfig:
-    active_text_provider: str = "openai"
-    active_image_provider: str = "dall-e-3"
+    plot_provider: str = "openai"     # provider used for plot generation
+    scene_provider: str = "openai"    # provider used for scene descriptions
+    image_provider: str = "openai"    # provider used for image generation
 
 
 @dataclass
@@ -46,6 +49,22 @@ class Config:
     black_forest_labs: BlackForestLabsConfig
     compositor: CompositorConfig
     output_base_dir: Path
+
+    def text_model_name(self, provider: str) -> str:
+        """Resolve a text provider name to the configured model it will run."""
+        if provider == "openai":
+            return self.openai.text_model
+        if provider == "anthropic":
+            return self.anthropic.text_model
+        return provider
+
+    def image_model_name(self, provider: str) -> str:
+        """Resolve an image provider name to the configured model it will run."""
+        if provider == "openai":
+            return self.openai.image_model
+        if provider == "black_forest_labs":
+            return self.black_forest_labs.image_model
+        return provider
 
 
 def load_config(path: Path = Path("config.yml")) -> Config:
@@ -60,25 +79,25 @@ def load_config(path: Path = Path("config.yml")) -> Config:
     openai_cfg = OpenAIConfig(
         api_key=raw.get("openai", {}).get("api_key", ""),
         text_model=raw.get("openai", {}).get("text_model", "gpt-4o"),
-        image_model=raw.get("openai", {}).get("image_model", "dall-e-3"),
+        image_model=raw.get("openai", {}).get("image_model", "gpt-image-1"),
         image_size=raw.get("openai", {}).get("image_size", "1024x1024"),
         image_quality=raw.get("openai", {}).get("image_quality", "standard"),
+        image_moderation=raw.get("openai", {}).get("image_moderation", "auto"),
         max_concurrent_images=raw.get("openai", {}).get("max_concurrent_images", 4),
     )
-    if not openai_cfg.api_key:
-        raise ValueError(
-            "openai.api_key is empty in config.yml. "
-            "Add your OpenAI API key to continue."
-        )
 
     providers = ProvidersConfig(
-        active_text_provider=raw.get("providers", {}).get("active_text_provider", "openai"),
-        active_image_provider=raw.get("providers", {}).get("active_image_provider", "dall-e-3"),
+        plot_provider=raw.get("providers", {}).get("plot_provider", "openai"),
+        scene_provider=raw.get("providers", {}).get("scene_provider", "openai"),
+        image_provider=raw.get("providers", {}).get("image_provider", "openai"),
     )
-    anthropic = AnthropicConfig(api_key=raw.get("anthropic", {}).get("api_key", ""))
+    anthropic = AnthropicConfig(
+        api_key=raw.get("anthropic", {}).get("api_key", ""),
+        text_model=raw.get("anthropic", {}).get("text_model", "claude-sonnet-4-6"),
+    )
     bfl = BlackForestLabsConfig(
         api_key=raw.get("black_forest_labs", {}).get("api_key", ""),
-        model=raw.get("black_forest_labs", {}).get("model", "flux-pro"),
+        image_model=raw.get("black_forest_labs", {}).get("image_model", "flux-pro-1.1"),
     )
     compositor = CompositorConfig(
         canvas_width=raw.get("compositor", {}).get("canvas_width", 2400),
@@ -87,6 +106,18 @@ def load_config(path: Path = Path("config.yml")) -> Config:
         margin_px=raw.get("compositor", {}).get("margin_px", 24),
     )
     output_base_dir = Path(raw.get("output", {}).get("base_dir", "output"))
+
+    # Validate keys only for providers that are actually used
+    text_providers = {providers.plot_provider, providers.scene_provider}
+    if "openai" in text_providers or providers.image_provider == "openai":
+        if not openai_cfg.api_key:
+            raise ValueError("openai.api_key is required when using an OpenAI provider.")
+    if "anthropic" in text_providers:
+        if not anthropic.api_key:
+            raise ValueError("anthropic.api_key is required when using Anthropic as a text provider.")
+    if providers.image_provider == "black_forest_labs":
+        if not bfl.api_key:
+            raise ValueError("black_forest_labs.api_key is required when using the black_forest_labs image provider.")
 
     return Config(
         providers=providers,

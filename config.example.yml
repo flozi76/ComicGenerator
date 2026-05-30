@@ -1,27 +1,32 @@
+# Pick which configured provider handles each role.
+# The actual model is taken from that provider's text_model / image_model below.
 providers:
-  active_text_provider: openai
-  active_image_provider: dall-e-3   # options: dall-e-3, flux
+  plot_provider: openai          # provider for plot generation:    openai | anthropic
+  scene_provider: openai         # provider for scene descriptions: openai | anthropic
+  image_provider: openai         # provider for image generation:   openai | black_forest_labs
 
 openai:
-  api_key: ""                        # set your OpenAI key here (or in config.yml)
-  text_model: gpt-4o
-  image_model: dall-e-3
+  api_key: ""                    # set your OpenAI key here (or in config.yml)
+  text_model: gpt-4o             # gpt-4o | gpt-4o-mini | gpt-4-turbo
+  image_model: gpt-image-1       # gpt-image-1 | gpt-image-1-mini (dall-e-2/3 retired May 12 2026)
   image_size: "1024x1024"
   image_quality: standard
-  max_concurrent_images: 4          # semaphore cap for parallel DALL-E calls
+  image_moderation: auto         # gpt-image-* only: auto | low (use "low" if prompts get moderation_blocked)
+  max_concurrent_images: 4       # global cap for parallel image calls (~5 req/min on default tiers)
 
 anthropic:
-  api_key: ""                        # reserved — not used yet
+  api_key: ""                    # required when plot_provider or scene_provider is "anthropic"
+  text_model: claude-sonnet-4-6  # claude-opus-4-8 | claude-sonnet-4-6 | claude-haiku-4-5
 
 black_forest_labs:
-  api_key: ""                        # reserved — for Flux Pro switch
-  model: flux-pro
+  api_key: ""                    # required when image_provider is "black_forest_labs"
+  image_model: flux-pro-1.1      # flux-pro-1.1 | flux-pro | flux-dev
 
 compositor:
   canvas_width: 2400
   canvas_height: 3200
-  gap_px: 8                         # gutter between panels
-  margin_px: 24                     # outer page margin
+  gap_px: 8                      # gutter between panels
+  margin_px: 24                  # outer page margin
 
 output:
-  base_dir: output                  # relative to project root
+  base_dir: output               # relative to project root
