@@ -7,18 +7,19 @@ from src.agents.plot_agent import Beat, PlotResult
 from src.config import Config
 from src.models.image_client import ImageClient, ImageClientError
 from src.models.text_client import TextClient, TextClientError
+from src.style import StyleConfig
 
-SCENE_SYSTEM_PROMPT = """You are a noir comic book artist. Expand a story beat into a visual panel description.
-
+_SCENE_SYSTEM_STRUCTURE = """
 Respond ONLY with compact JSON, no markdown fences:
 {
   "caption": "one short atmospheric narration sentence",
   "dialogue": "one short spoken line, or empty string if none",
   "image_prompt": "visual scene description under 50 words — focus on setting, lighting, character expression, and mood. Avoid explicit violence; convey tension atmospherically."
-}
+}"""
 
-The image_prompt describes only what is seen: composition, environment, mood, camera angle. Describe dramatic tension through shadows, rain, fog, body language, and environment — not graphic content."""
 
+def _build_scene_system_prompt(persona: str) -> str:
+    return f"{persona}\n{_SCENE_SYSTEM_STRUCTURE}"
 
 
 @dataclass
@@ -57,16 +58,17 @@ async def run(
     text_client: TextClient,
     image_client: ImageClient,
     semaphore: asyncio.Semaphore,
-    style_suffix: str,
+    style_config: StyleConfig,
 ) -> SceneResult:
     print(f"  [scene {beat.index + 1:02d}] Generating text...")
 
+    scene_system_prompt = _build_scene_system_prompt(style_config.scene_persona)
     user_msg = (
         f'Story: "{plot.title}" — {plot.tagline}\n'
         f"Scene {beat.index + 1} of {plot.panel_count}: {beat.beat}"
     )
 
-    scene_data = await text_client.chat_json(SCENE_SYSTEM_PROMPT, user_msg, max_tokens=500)
+    scene_data = await text_client.chat_json(scene_system_prompt, user_msg, max_tokens=500)
 
     caption = scene_data.get("caption", "")
     dialogue = scene_data.get("dialogue", "")
@@ -81,7 +83,7 @@ async def run(
         text_elements.append(f'A comic speech bubble in the upper area with the text: "{dialogue}"')
     text_instruction = " ".join(text_elements) if text_elements else ""
 
-    full_prompt = f"{aspect_hint}{image_prompt_base}. {style_suffix} {text_instruction}".strip()
+    full_prompt = f"{aspect_hint}{image_prompt_base}. {style_config.image_suffix} {text_instruction}".strip()
 
     print(f"  [scene {beat.index + 1:02d}] Generating image...")
     async with semaphore:
