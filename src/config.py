@@ -27,6 +27,26 @@ class BlackForestLabsConfig:
 
 
 @dataclass
+class FalConfig:
+    api_key: str = ""
+    image_model: str = "fal-ai/flux/dev"   # full fal model path
+    image_size: str = "square_hd"          # square_hd | square | portrait_4_3 | landscape_4_3 | ...
+    enable_safety_checker: bool = False    # False = no NSFW filter (permissive); avoids blacked-out images
+
+
+@dataclass
+class InstagramConfig:
+    enabled: bool = False                       # True = offer to publish after generation
+    username: str = ""                          # Instagram handle
+    password: str = ""                          # Instagram password
+    session_file: str = "instagram_session.json"  # cached login session (avoids re-login/checkpoints)
+    seconds_per_page: float = 3.0               # how long each page is shown in the reel
+    publish_reel: bool = True                   # publish a slideshow reel of the pages
+    publish_story: bool = True                  # publish each page as a story frame
+    caption: str = "{title}\n\n{tagline}"       # caption template; {title} {tagline} are substituted
+
+
+@dataclass
 class CompositorConfig:
     canvas_width: int = 2400
     canvas_height: int = 3200
@@ -47,7 +67,9 @@ class Config:
     openai: OpenAIConfig
     anthropic: AnthropicConfig
     black_forest_labs: BlackForestLabsConfig
+    fal: FalConfig
     compositor: CompositorConfig
+    instagram: InstagramConfig
     output_base_dir: Path
 
     def text_model_name(self, provider: str) -> str:
@@ -99,11 +121,28 @@ def load_config(path: Path = Path("config.yml")) -> Config:
         api_key=raw.get("black_forest_labs", {}).get("api_key", ""),
         image_model=raw.get("black_forest_labs", {}).get("image_model", "flux-pro-1.1"),
     )
+    fal = FalConfig(
+        api_key=raw.get("fal", {}).get("api_key", ""),
+        image_model=raw.get("fal", {}).get("image_model", "fal-ai/flux/dev"),
+        image_size=raw.get("fal", {}).get("image_size", "square_hd"),
+        enable_safety_checker=raw.get("fal", {}).get("enable_safety_checker", False),
+    )
     compositor = CompositorConfig(
         canvas_width=raw.get("compositor", {}).get("canvas_width", 2400),
         canvas_height=raw.get("compositor", {}).get("canvas_height", 3200),
         gap_px=raw.get("compositor", {}).get("gap_px", 8),
         margin_px=raw.get("compositor", {}).get("margin_px", 24),
+    )
+    ig_raw = raw.get("instagram", {}) or {}
+    instagram = InstagramConfig(
+        enabled=ig_raw.get("enabled", False),
+        username=ig_raw.get("username", ""),
+        password=ig_raw.get("password", ""),
+        session_file=ig_raw.get("session_file", "instagram_session.json"),
+        seconds_per_page=ig_raw.get("seconds_per_page", 3.0),
+        publish_reel=ig_raw.get("publish_reel", True),
+        publish_story=ig_raw.get("publish_story", True),
+        caption=ig_raw.get("caption", "{title}\n\n{tagline}"),
     )
     output_base_dir = Path(raw.get("output", {}).get("base_dir", "output"))
 
