@@ -1,5 +1,6 @@
 config.yml
 output/
+instagram_session.json
 __pycache__/
 *.pyc
 *.pyo
