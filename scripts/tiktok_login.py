@@ -24,12 +24,14 @@ import base64
 import hashlib
 import json
 import os
+import socket
 import sys
 import time
 import urllib.parse
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+from typing import Optional
 
 import requests
 import yaml
@@ -220,39 +222,84 @@ def main() -> None:
 
     if use_server:
         port = redirect.port or 80
-        print(f"Waiting for the TikTok redirect on {args.redirect_uri} ...")
-        server = HTTPServer((redirect.hostname, port), _Handler)
-        while "code" not in _captured and "error" not in _captured:
-            server.handle_request()
-        if "code" not in _captured:
-            sys.exit(f"Authorization failed: {_captured}")
-        if _captured.get("state") != state:
-            sys.exit("State mismatch — aborting (possible CSRF).")
-        code = _captured["code"]
-    else:
-        redirected = input("\nAfter authorizing, paste the full redirected URL here:\n> ").strip()
-        qs = urllib.parse.parse_qs(urllib.parse.urlparse(redirected).query)
-        code = (qs.get("code") or [""])[0]
-        if not code:
-            sys.exit("No ?code= found in the pasted URL.")
+        print(f"Waiting for the TikTok redirect on {redirect_uri} ...")
+        print(
+            "If nothing happens, authorize in the browser and then paste the full redirected URL "
+            f"after {args.wait_timeout}s."
+        )
+        try:
+            server = HTTPServer((redirect.hostname, port), _Handler)
+        except OSError as exc:
+            if exc.errno == 48:
+                print(
+                    f"Local callback port {port} is already in use; falling back to manual URL paste mode."
+                )
+            else:
+                print(f"Could not start local callback server ({exc}); falling back to manual URL paste mode.")
+            use_server = False
+        else:
+            server.socket.settimeout(1.0)
+            deadline = time.time() + max(args.wait_timeout, 0)
+            while "code" not in _captured and "error" not in _captured and time.time() < deadline:
+                try:
+                    server.handle_request()
+                except socket.timeout:
+                    continue
+            if "code" in _captured:
+                if _captured.get("state") != state:
+                    sys.exit("State mismatch — aborting (possible CSRF).")
+                code = _captured["code"]
+            else:
+                if _captured.get("error"):
+                    err = _captured.get("error")
+                    desc = _captured.get("error_description", "")
+                    err_type = _captured.get("error_type", "")
+                    logid = _captured.get("logid", _captured.get("log_id", ""))
+                    msg = f"Authorization failed: error={err} error_type={err_type} description={desc} logid={logid}"
+                    if err == "unauthorized_client" and err_type == "client_key":
+                        msg += (
+                            "\nAction needed in TikTok Developer Portal (not local code):\n"
+                            "  1) Verify client_key/client_secret are from the same app.\n"
+                            "  2) Enable Login Kit + Content Posting API on that app.\n"
+                            "  3) Enable scopes user.info.basic and video.upload.\n"
+                            "  4) Add your TikTok account as Sandbox/Test user.\n"
+                            "  5) Confirm redirect URI exactly matches this run."
+                        )
+                    sys.exit(msg)
+                use_server = False
+                print("No callback received in time. Falling back to manual URL paste mode.")
+            server.server_close()
+
+    if not use_server:
+        redirected = input(
+            "\nAfter authorizing, paste the full redirected URL here\n"
+            "(it must include ?code=... in the query):\n> "
+        ).strip()
+        code = _extract_code_from_url(redirected)
 
     # TikTok URL-decodes the code param once; decode to be safe.
     code = urllib.parse.unquote(code)
 
-    resp = requests.post(
-        TOKEN_URL,
-        data={
-            "client_key": client_key,
-            "client_secret": client_secret,
-            "code": code,
-            "grant_type": "authorization_code",
-            "redirect_uri": args.redirect_uri,
-            "code_verifier": code_verifier,
-        },
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
-        timeout=30,
-    )
-    data = resp.json()
+    try:
+        resp = requests.post(
+            TOKEN_URL,
+            data={
+                "client_key": client_key,
+                "client_secret": client_secret,
+                "code": code,
+                "grant_type": "authorization_code",
+                "redirect_uri": redirect_uri,
+                "code_verifier": code_verifier,
+            },
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            timeout=30,
+        )
+        data = resp.json()
+    except requests.RequestException as exc:
+        sys.exit(f"Token exchange request failed: {exc}")
+    except ValueError:
+        sys.exit(f"Token exchange returned non-JSON (HTTP {resp.status_code}): {resp.text[:300]}")
+
     if "access_token" not in data:
         sys.exit(f"Token exchange failed: {json.dumps(data, indent=2)}")
 
