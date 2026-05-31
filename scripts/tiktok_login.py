@@ -20,7 +20,10 @@ register that exact URL on the app (Login Kit → Redirect URI), or pass
 --redirect-uri to match what you registered.
 """
 import argparse
+import base64
+import hashlib
 import json
+import os
 import sys
 import time
 import urllib.parse
@@ -63,6 +66,14 @@ def _scope_for_mode(mode: str) -> str:
     return "video.publish" if mode == "direct" else "video.upload"
 
 
+def _pkce_pair() -> tuple[str, str]:
+    """Return (code_verifier, code_challenge) using S256 method."""
+    verifier = base64.urlsafe_b64encode(os.urandom(32)).rstrip(b"=").decode()
+    digest = hashlib.sha256(verifier.encode()).digest()
+    challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
+    return verifier, challenge
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="TikTok OAuth login helper.")
     ap.add_argument("--config", default="config.yml")
@@ -83,12 +94,15 @@ def main() -> None:
 
     scope = _scope_for_mode(mode)
     state = str(int(time.time()))
+    code_verifier, code_challenge = _pkce_pair()
     params = {
         "client_key": client_key,
         "scope": scope,
         "response_type": "code",
         "redirect_uri": args.redirect_uri,
         "state": state,
+        "code_challenge": code_challenge,
+        "code_challenge_method": "S256",
     }
     auth_link = AUTH_URL + "?" + urllib.parse.urlencode(params)
 
@@ -132,6 +146,7 @@ def main() -> None:
             "code": code,
             "grant_type": "authorization_code",
             "redirect_uri": args.redirect_uri,
+            "code_verifier": code_verifier,
         },
         headers={"Content-Type": "application/x-www-form-urlencoded"},
         timeout=30,
