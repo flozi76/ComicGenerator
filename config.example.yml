@@ -34,10 +34,25 @@ compositor:
   gap_px: 8                      # gutter between panels
   margin_px: 24                  # outer page margin
 
+# TikTok publishing (active). See tiktok-setup.md for the one-time app + token setup.
+tiktok:
+  enabled: false                 # true = ask "Publish to TikTok?" after generation
+  mode: inbox                    # inbox (upload to drafts, NO app review) | direct (post to profile, needs audit)
+  client_key: ""                 # from your app at https://developers.tiktok.com/apps/
+  client_secret: ""              # from your app at https://developers.tiktok.com/apps/
+  token_file: tiktok_token.json  # written by `python3 scripts/tiktok_login.py` after you authorize
+  access_token: ""               # optional; normally left blank — token_file is used instead
+  refresh_token: ""
+  seconds_per_page: 3            # how long each comic page is shown in the reel slideshow
+  # --- direct mode only ---
+  privacy_level: SELF_ONLY       # SELF_ONLY | PUBLIC_TO_EVERYONE | MUTUAL_FOLLOW_FRIENDS (unaudited apps: SELF_ONLY)
+  caption: "{title}\n\n{tagline}"  # video caption; {title} and {tagline} are substituted
+
+# Instagram publishing (legacy, unofficial instagrapi). Only used if tiktok.enabled is false.
 instagram:
   enabled: false                 # true = ask "Publish to Instagram?" after generation
   username: ""                   # your Instagram handle
-  password: ""                   # your Instagram password (login via instagrapi; requires `pip install instagrapi` and ffmpeg)
+  password: ""                   # your Instagram password (requires `pip install instagrapi` and ffmpeg)
   session_file: instagram_session.json  # cached login session (avoids re-login / checkpoint prompts)
   seconds_per_page: 3            # how long each comic page is shown in the reel slideshow
   publish_reel: true             # publish a slideshow reel of the page(s)

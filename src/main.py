@@ -15,6 +15,7 @@ from src.config import load_config
 from src.models.image_client import get_image_client
 from src.models.text_client import get_text_client
 from src.publisher import publish_to_instagram
+from src.publisher_tiktok import publish_to_tiktok
 from src.style import STYLES_DIR, load_style
 
 
@@ -34,12 +35,12 @@ def build_output_dir(base: Path, title_slug: str) -> Path:
     return folder
 
 
-def _confirm_publish() -> bool:
-    """Ask whether to publish to Instagram. Non-interactive stdin → no."""
+def _confirm_publish(target: str) -> bool:
+    """Ask whether to publish. Non-interactive stdin → no."""
     if not sys.stdin.isatty():
         return False
     try:
-        answer = input("\nPublish to Instagram as reel + story? [y/N]: ").strip().lower()
+        answer = input(f"\nPublish to {target}? [y/N]: ").strip().lower()
     except EOFError:
         return False
     return answer in ("y", "yes")
@@ -124,20 +125,36 @@ async def run_pipeline(
 
     print(f"\nDone! Output folder: {output_dir}")
 
-    # Step 4 — optional Instagram publishing
+    # Step 4 — optional publishing. TikTok is the active target; the (disabled by
+    # default) instagrapi path remains for anyone who re-enables instagram.enabled.
     # `publish` overrides the prompt: True/False from CLI flags, None = ask.
-    if publish is None:
-        do_publish = cfg.instagram.enabled and _confirm_publish()
+    if cfg.tiktok.enabled:
+        target, do = "TikTok", _do_publish_tiktok
+    elif cfg.instagram.enabled:
+        target, do = "Instagram", _do_publish_instagram
     else:
-        do_publish = publish
+        target, do = None, None
 
-    if do_publish:
-        print("\n[4/4] Publishing to Instagram...")
-        try:
-            publish_to_instagram(plot, comic_paths, output_dir, cfg.instagram)
-            print("      Published to Instagram.")
-        except Exception as e:
-            print(f"      Instagram publishing failed: {e}", file=sys.stderr)
+    if target is not None:
+        if publish is None:
+            do_publish = _confirm_publish(target)
+        else:
+            do_publish = publish
+        if do_publish:
+            print(f"\n[4/4] Publishing to {target}...")
+            try:
+                do(plot, comic_paths, output_dir, cfg)
+                print(f"      Published to {target}.")
+            except Exception as e:
+                print(f"      {target} publishing failed: {e}", file=sys.stderr)
+
+
+def _do_publish_tiktok(plot, comic_paths, output_dir, cfg) -> None:
+    publish_to_tiktok(plot, comic_paths, output_dir, cfg.tiktok)
+
+
+def _do_publish_instagram(plot, comic_paths, output_dir, cfg) -> None:
+    publish_to_instagram(plot, comic_paths, output_dir, cfg.instagram)
 
 
 def main() -> None:
@@ -180,13 +197,13 @@ def main() -> None:
         dest="publish",
         action="store_true",
         default=None,
-        help="Publish to Instagram without prompting (reel + story).",
+        help="Publish without prompting (to the platform enabled in config).",
     )
     publish_group.add_argument(
         "--no-publish",
         dest="publish",
         action="store_false",
-        help="Skip Instagram publishing without prompting.",
+        help="Skip publishing without prompting.",
     )
     args = parser.parse_args()
 

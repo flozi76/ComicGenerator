@@ -13,6 +13,7 @@ The pipeline runs in three steps:
 3. **Composite** — Pillow stitches all panels into greyscale pages using the AI-chosen layout (weighted rows, splash panels, dense grids — whatever the story calls for).
 
 Output is saved to a timestamped folder so every run is preserved:
+
 ```
 output/
 └── 2026-05-28/
@@ -46,13 +47,13 @@ python -m src.main --idea "A blind medium receives a photograph of her own futur
 
 ### Options
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--idea TEXT` | *(required)* | Your story premise |
-| `--style NAME` | `dylan-dog` | Visual style — `dylan-dog` or `milo-manara` |
-| `--panels N` | model decides | Total number of panels (4–32). Panels are split across pages automatically |
-| `--fun` | off | Switch to absurdist/comedy mode instead of horror/noir |
-| `--config PATH` | `config.yml` | Path to a different config file |
+| Flag            | Default       | Description                                                                |
+| --------------- | ------------- | -------------------------------------------------------------------------- |
+| `--idea TEXT`   | _(required)_  | Your story premise                                                         |
+| `--style NAME`  | `dylan-dog`   | Visual style — `dylan-dog` or `milo-manara`                                |
+| `--panels N`    | model decides | Total number of panels (4–32). Panels are split across pages automatically |
+| `--fun`         | off           | Switch to absurdist/comedy mode instead of horror/noir                     |
+| `--config PATH` | `config.yml`  | Path to a different config file                                            |
 
 ### Examples
 
@@ -77,11 +78,11 @@ python -m src.main --idea "A cursed gondolier in Venice" --style milo-manara --p
 
 The visual style is defined in `Styles/<name>.md`. Each file contains the image prompt suffix appended to every panel generation call.
 
-| Style | Description |
-|-------|-------------|
-| `dylan-dog` | Italian noir — black & white pen-and-ink, heavy crosshatching, gothic London atmosphere, dramatic chiaroscuro |
-| `milo-manara` | Italian fumetti — fluid elegant linework, warm luminous tones, Mediterranean and mythological settings |
-| `anime` | Classic 80s–90s anime — cel-shaded color, neon-lit cyberpunk dystopia, cinematic angles, Otomo/Shirow aesthetic |
+| Style         | Description                                                                                                     |
+| ------------- | --------------------------------------------------------------------------------------------------------------- |
+| `dylan-dog`   | Italian noir — black & white pen-and-ink, heavy crosshatching, gothic London atmosphere, dramatic chiaroscuro   |
+| `milo-manara` | Italian fumetti — fluid elegant linework, warm luminous tones, Mediterranean and mythological settings          |
+| `anime`       | Classic 80s–90s anime — cel-shaded color, neon-lit cyberpunk dystopia, cinematic angles, Otomo/Shirow aesthetic |
 
 To add a new style, create `Styles/my-style.md` and run with `--style my-style`.
 
@@ -95,15 +96,15 @@ Each role picks a configured provider block, and the block supplies the actual m
 
 ```yaml
 providers:
-  plot_provider: openai             # openai | anthropic
-  scene_provider: openai            # openai | anthropic
-  image_provider: openai            # openai | black_forest_labs
+  plot_provider: openai # openai | anthropic
+  scene_provider: openai # openai | anthropic
+  image_provider: openai # openai | black_forest_labs
 
 openai:
-  text_model: gpt-4o                # gpt-4o | gpt-4o-mini
-  image_model: gpt-image-1          # gpt-image-1 | dall-e-3
+  text_model: gpt-4o # gpt-4o | gpt-4o-mini
+  image_model: gpt-image-1 # gpt-image-1 | dall-e-3
 black_forest_labs:
-  image_model: flux-pro-1.1         # flux-pro-1.1 | flux-pro (requires api_key)
+  image_model: flux-pro-1.1 # flux-pro-1.1 | flux-pro (requires api_key)
 ```
 
 See `Notes/image-model-research.md` for a comparison of available models.

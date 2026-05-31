@@ -8,7 +8,7 @@ A Python console application that generates a single-page noir/horror comic from
 1. **Plot agent** (sync): GPT-4o generates title, tagline, panel count (4–12), page layout, and scene beats
 2. **Scene agents** (async, parallel): one coroutine per scene expands a beat into caption + image prompt, then generates a DALL-E 3 image
 3. **Compositor**: Pillow stitches all panel images into one greyscale `comic.png`
-4. **Publisher** (optional): after generation, offers to publish the page(s) to Instagram as a slideshow **reel** + **story** frames via `instagrapi`
+4. **Publisher** (optional): after generation, offers to publish the page(s) as a video. Active target is **TikTok** (Content Posting API — renders the pages into a reel MP4 and uploads it; default `inbox` mode lands in TikTok drafts so no app review is needed). A legacy **Instagram** path (`instagrapi`, disabled by default) remains for reference.
 
 `Idea/noir-comic-generator.jsx` is a React prototype for reference — it is not used by the Python app.
 
@@ -31,18 +31,20 @@ python -m src.main --idea "..." --style dylan-dog
 # With a different config path
 python -m src.main --idea "..." --config /path/to/config.yml
 
-# Auto-publish to Instagram (skip the prompt) / never publish
+# Auto-publish (skip the prompt) / never publish — target set by config (TikTok)
 python -m src.main --idea "..." --publish
 python -m src.main --idea "..." --no-publish
 ```
 
-Instagram publishing needs `instagrapi` (in `requirements.txt`) and ffmpeg for the reel video (`brew install ffmpeg`, or it falls back to the binary bundled with `imageio-ffmpeg`). Fill `instagram.username` / `instagram.password` in `config.yml` and set `instagram.enabled: true` to be prompted after generation.
+Publishing needs ffmpeg for the reel video (`brew install ffmpeg`, or it falls back to the binary bundled with `imageio-ffmpeg`) and `requests`. Set `tiktok.enabled: true` to be prompted after generation.
 
-**First login:** Instagram challenges a login from a new device/IP with a verification code (email/SMS). Run the login helper once **from a real terminal** so you can type the code; it caches the session so later runs publish without prompting:
+**TikTok (active).** Renders the page(s) into a 9:16 reel MP4 and uploads it via the **Content Posting API** (raw bytes — no public file host needed). Two `tiktok.mode`s:
+- `inbox` (default) — uploads to your TikTok **drafts**; you tap *Post* in the app. Works for **unaudited** apps with only the `video.upload` scope. This is the no-review path.
+- `direct` — posts to the profile. Needs the `video.publish` scope and a TikTok app audit; unaudited apps can only post `SELF_ONLY` (private).
 
-```bash
-python3 scripts/instagram_login.py
-```
+One-time setup is in **`tiktok-setup.md`** (create app at https://developers.tiktok.com/, fill `tiktok.client_key`/`client_secret`, then `python3 scripts/tiktok_login.py` to authorize and cache tokens to `tiktok.token_file`).
+
+**Instagram (legacy, disabled).** `src/publisher.py` still has the `instagrapi` reel+story path; it's only used if `tiktok.enabled` is false and `instagram.enabled` is true. Logs in with `instagram.username`/`password` (run `python3 scripts/instagram_login.py` once for the device challenge). Violates IG ToS; kept for reference, not the recommended path.
 
 Output is written to `output/<YYYY-MM-DD>/story_<HHmmss>_<slug>_<rand>/` containing `plot.json`, `scene_NN.png` files, and `comic.png`.
 
@@ -50,11 +52,15 @@ Output is written to `output/<YYYY-MM-DD>/story_<HHmmss>_<slug>_<rand>/` contain
 
 ### Pipeline flow (`src/main.py`)
 ```
-load_config() → plot_agent.run() → [asyncio.gather(scene_agent.run() × N)] → compositor.compose() → [publisher.publish_to_instagram()]
+load_config() → plot_agent.run() → [asyncio.gather(scene_agent.run() × N)] → compositor.compose() → [publish_to_tiktok() | publish_to_instagram()]
 ```
 
-### Instagram publishing (`src/publisher.py`)
-Optional final step. After compositing, `main.py` decides whether to publish: the `--publish`/`--no-publish` flags force the choice; otherwise, if `instagram.enabled` is true and stdin is a TTY, it prompts `Publish to Instagram as reel + story? [y/N]`. `publish_to_instagram()` logs in with `instagrapi` (caching the session to `instagram.session_file` to avoid re-login/checkpoints), then: (1) **reel** — `build_reel()` renders the page PNG(s) into a 9:16 `reel.mp4` slideshow via **ffmpeg** (concat demuxer, `seconds_per_page` each, padded on black) and `clip_upload`s it; (2) **story** — each page is letterboxed to 1080×1920 and pushed via `photo_upload_to_story`. `instagrapi` is imported lazily inside the function, so the rest of the app runs without it installed. Publishing failures are caught and printed — they never abort a successful generation.
+### Publishing (`src/publisher_tiktok.py`, `src/publisher.py`)
+Optional final step. After compositing, `main.py` picks a target: if `tiktok.enabled` → TikTok; else if `instagram.enabled` → Instagram; else nothing. The `--publish`/`--no-publish` flags force the choice; otherwise, if stdin is a TTY, it prompts `Publish to <target>? [y/N]`. Publishing failures are caught and printed — they never abort a successful generation. Both modules import their heavy/optional deps (`requests`, `instagrapi`) lazily, so the rest of the app runs without them installed. **TikTok credentials are validated at publish time, not in `load_config`**, so a missing token never blocks generation.
+
+**TikTok (`src/publisher_tiktok.py`, `publish_to_tiktok()`)** — `build_reel()` (imported from `publisher.py`) renders the page PNG(s) into a 9:16 `reel.mp4`; then the **Content Posting API** flow: `_load_tokens` (from `tiktok.token_file`, auto-`_refresh_if_needed` via the OAuth refresh token) → `_init` POSTs a publish-init (`inbox/video/init/` for drafts or `video/init/` for direct) with `source: FILE_UPLOAD` → `_upload_file` PUTs the whole MP4 as one chunk to the returned `upload_url`. `inbox` mode lands in drafts (no audit); `direct` mode includes `post_info` (title from `_format_caption`, `privacy_level`). Tokens are obtained one-time via `scripts/tiktok_login.py` (local-redirect OAuth code flow).
+
+**Instagram (`src/publisher.py`, `publish_to_instagram()`, legacy)** — logs in with `instagrapi` (caching the session to `instagram.session_file`), then: (1) **reel** — `build_reel()` renders a 9:16 `reel.mp4` slideshow via **ffmpeg** (concat demuxer, `seconds_per_page` each, padded on black) and `clip_upload`s it; (2) **story** — each page is letterboxed to 1080×1920 and pushed via `photo_upload_to_story`. `build_reel`/`_format_caption` here are the shared helpers reused by the TikTok module.
 
 ### Layout system
 The plot agent asks GPT-4o to return a **weighted row layout** — a JSON structure where each row has a `height_weight` and each panel within a row has a `weight`. The compositor translates these weights into pixel dimensions using simple proportional arithmetic. The layout drives which scenes go where and at what aspect ratio.
@@ -80,7 +86,9 @@ DALL-E 3 often ignores "black and white" prompts and returns warm/sepia images. 
 | `src/agents/plot_agent.py` | Step 1 — sync GPT-4o call, returns `PlotResult` with layout |
 | `src/agents/scene_agent.py` | Step 2 — async coroutine, text + image per scene |
 | `src/compositor.py` | Step 3 — Pillow weighted-row compositor |
-| `src/publisher.py` | Step 4 (optional) — Instagram reel + story publishing via `instagrapi` + ffmpeg |
+| `src/publisher_tiktok.py` | Step 4 (active) — TikTok reel upload via Content Posting API (inbox draft / direct) |
+| `src/publisher.py` | Step 4 (legacy) — Instagram reel + story via `instagrapi`; also exports shared `build_reel`/`_format_caption` |
+| `scripts/tiktok_login.py` | One-time TikTok OAuth helper → caches tokens to `tiktok.token_file` |
 | `src/models/text_client.py` | Thin async wrapper over `openai.AsyncOpenAI` with JSON parsing |
 | `src/models/image_client.py` | `ImageClient` ABC + `OpenAIImageClient` + `FluxClient` + `FalClient` |
 | `Styles/dylan-dog.md` | Style definition — image prompt suffix loaded at runtime |
@@ -119,15 +127,26 @@ compositor:
   canvas_height: 3200
   gap_px: 8
   margin_px: 24
-instagram:
-  enabled: false                  # true = prompt to publish after generation
-  username: ""                    # Instagram handle
-  password: ""                    # Instagram password
-  session_file: instagram_session.json
+tiktok:                           # active publisher
+  enabled: true                   # true = prompt to publish after generation
+  mode: inbox                     # inbox (drafts, no app review) | direct (profile, needs audit)
+  client_key: ""                  # from developers.tiktok.com
+  client_secret: ""
+  token_file: tiktok_token.json   # written by scripts/tiktok_login.py
+  access_token: ""                # optional; normally left blank (use token_file)
+  refresh_token: ""
   seconds_per_page: 3             # reel slideshow duration per page
+  privacy_level: SELF_ONLY        # direct mode only
+  caption: "{title}\n\n{tagline}" # direct mode only; {title} {tagline} substituted
+instagram:                        # legacy, disabled by default
+  enabled: false
+  username: ""
+  password: ""
+  session_file: instagram_session.json
+  seconds_per_page: 3
   publish_reel: true
   publish_story: true
-  caption: "{title}\n\n{tagline}" # template; {title} {tagline} substituted
+  caption: "{title}\n\n{tagline}"
 ```
 
 ## Adding a new comic style

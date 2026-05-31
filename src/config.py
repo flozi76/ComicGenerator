@@ -47,6 +47,22 @@ class InstagramConfig:
 
 
 @dataclass
+class TikTokConfig:
+    """TikTok Content Posting API. Default 'inbox' mode uploads the reel to your
+    TikTok drafts (no app review needed); you tap 'Post' in the app to publish."""
+    enabled: bool = False
+    client_key: str = ""                        # from developers.tiktok.com app
+    client_secret: str = ""
+    access_token: str = ""                       # filled by scripts/tiktok_login.py (or token_file)
+    refresh_token: str = ""
+    token_file: str = "tiktok_token.json"        # cached access/refresh token (preferred over the fields above)
+    mode: str = "inbox"                          # inbox (draft, no review) | direct (public/SELF_ONLY, needs audit)
+    seconds_per_page: float = 3.0                # how long each page is shown in the reel
+    privacy_level: str = "SELF_ONLY"             # direct mode only: SELF_ONLY | PUBLIC_TO_EVERYONE | MUTUAL_FOLLOW_FRIENDS
+    caption: str = "{title}\n\n{tagline}"        # direct mode only: caption template
+
+
+@dataclass
 class CompositorConfig:
     canvas_width: int = 2400
     canvas_height: int = 3200
@@ -70,6 +86,7 @@ class Config:
     fal: FalConfig
     compositor: CompositorConfig
     instagram: InstagramConfig
+    tiktok: TikTokConfig
     output_base_dir: Path
 
     def text_model_name(self, provider: str) -> str:
@@ -146,6 +163,19 @@ def load_config(path: Path = Path("config.yml")) -> Config:
         publish_story=ig_raw.get("publish_story", True),
         caption=ig_raw.get("caption", "{title}\n\n{tagline}"),
     )
+    tt_raw = raw.get("tiktok", {}) or {}
+    tiktok = TikTokConfig(
+        enabled=tt_raw.get("enabled", False),
+        client_key=tt_raw.get("client_key", ""),
+        client_secret=tt_raw.get("client_secret", ""),
+        access_token=tt_raw.get("access_token", ""),
+        refresh_token=tt_raw.get("refresh_token", ""),
+        token_file=tt_raw.get("token_file", "tiktok_token.json"),
+        mode=tt_raw.get("mode", "inbox"),
+        seconds_per_page=tt_raw.get("seconds_per_page", 3.0),
+        privacy_level=tt_raw.get("privacy_level", "SELF_ONLY"),
+        caption=tt_raw.get("caption", "{title}\n\n{tagline}"),
+    )
     output_base_dir = Path(raw.get("output", {}).get("base_dir", "output"))
 
     # Validate keys only for providers that are actually used
@@ -163,6 +193,9 @@ def load_config(path: Path = Path("config.yml")) -> Config:
         if not fal.api_key:
             raise ValueError("fal.api_key is required when using the fal image provider.")
 
+    # Note: TikTok credential checks happen at publish time (in publisher_tiktok),
+    # not here — a missing token must never block comic generation.
+
     return Config(
         providers=providers,
         openai=openai_cfg,
@@ -171,5 +204,6 @@ def load_config(path: Path = Path("config.yml")) -> Config:
         fal=fal,
         compositor=compositor,
         instagram=instagram,
+        tiktok=tiktok,
         output_base_dir=output_base_dir,
     )
