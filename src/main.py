@@ -163,7 +163,7 @@ async def run_pipeline(
 
 
 def _do_publish_tiktok(plot, comic_paths, output_dir, cfg) -> None:
-    publish_to_tiktok(plot, comic_paths, output_dir, cfg.tiktok)
+    publish_to_tiktok(plot, comic_paths, output_dir, cfg.tiktok, cfg.compositor)
 
 
 def _do_publish_instagram(plot, comic_paths, output_dir, cfg) -> None:
