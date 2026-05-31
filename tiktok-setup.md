@@ -46,17 +46,31 @@ We use **inbox/draft mode**: the app uploads your comic reel to your TikTok **dr
 
 ## 3. Register the redirect URI
 
-The login helper runs a tiny local web server to catch the OAuth redirect.
+TikTok's **Login Kit → Redirect URI → Web** tab only accepts **`https://`** URLs, so a
+`http://127.0.0.1:8080/callback` localhost callback **cannot be registered there** — TikTok
+rejects the whole login with a generic `client_key` error if the `redirect_uri` you send
+doesn't exactly match a registered one. So we register an https URL we control and let the
+login helper use its paste-the-redirected-URL flow.
 
-1. In your app settings → **Login Kit** / **Redirect URI**, add **exactly**:
+1. In your app settings → **Login Kit** → **Redirect URI** → **Web**, add an https URL you
+   own. A raw file in this repo works fine (it just needs to exist and return 200):
    ```
-   http://127.0.0.1:8080/callback
+   https://raw.githubusercontent.com/<you>/ComicGenerator/main/terms/index.md
    ```
 2. Save.
+3. Put that **exact** URL in `config.yml` under `tiktok.redirect_uri` so the login script
+   sends the matching value:
+   ```yaml
+   tiktok:
+     redirect_uri: "https://raw.githubusercontent.com/<you>/ComicGenerator/main/terms/index.md"
+   ```
 
-> If TikTok rejects a raw IP/`http`, try `http://localhost:8080/callback` and pass `--redirect-uri http://localhost:8080/callback` to the login script in step 6. Some app configs require https — if so, tell me and I'll switch the helper to the paste-the-URL flow instead.
+> The helper auto-detects that this isn't a localhost URL and switches to "paste the
+> redirected URL" mode: after you approve in the browser, TikTok lands on that https page
+> with `?code=...` in the address bar — copy the whole URL back into the terminal.
 
-✅ Checkpoint: `http://127.0.0.1:8080/callback` is registered.
+✅ Checkpoint: an https Redirect URI is registered **and** the identical string is in
+`tiktok.redirect_uri`.
 
 ---
 
@@ -98,16 +112,14 @@ python3 scripts/tiktok_login.py
 What happens:
 
 1. Your browser opens the TikTok authorization page → approve.
-2. TikTok redirects to `http://127.0.0.1:8080/callback`; the helper catches it.
-3. It exchanges the code and writes **`tiktok_token.json`** (access + refresh token).
+2. TikTok redirects to your registered https URL with `?code=...` in the address bar.
+3. Copy that **full** URL and paste it back into the terminal when prompted.
+4. The helper exchanges the code and writes **`tiktok_token.json`** (access + refresh token).
 
-If the browser didn't open, copy the printed URL manually. If you registered a different redirect URI, run:
+The redirect URI comes from `tiktok.redirect_uri` in config (step 3). To override it for one
+run, pass `--redirect-uri <url>` — it must still exactly match a registered one.
 
-```bash
-python3 scripts/tiktok_login.py --redirect-uri http://localhost:8080/callback
-```
-
-✅ Checkpoint: `tiktok_token.json` exists and the script printed `scope: video.upload`.
+✅ Checkpoint: `tiktok_token.json` exists and the script printed `scope: ...,video.upload`.
 
 ---
 
@@ -155,6 +167,8 @@ To skip the manual tap and post straight to the profile, switch to Direct Post:
 | `client_key / client_secret are not set`    | Fill them in config.yml (step 4)                                                           |
 | `No TikTok access token found`              | Run `python3 scripts/tiktok_login.py` (step 6)                                             |
 | Redirect URI mismatch error in browser      | The URI in step 3 must **exactly** match the one the script uses (`--redirect-uri`)        |
+| `Es ist etwas schiefgelaufen` / generic `client_key` error **after** login | `redirect_uri` sent ≠ a registered one. Make `tiktok.redirect_uri` exactly equal a Login Kit **Web** (https) Redirect URI (step 3). |
+| `Es ist etwas schiefgelaufen` / generic `client_key` error **after** login | `redirect_uri` sent ≠ a registered one. Make `tiktok.redirect_uri` exactly equal a Login Kit **Web** (https) Redirect URI (step 3). |
 | `scope_not_authorized` / upload rejected    | `video.upload` not enabled, or you're not a Sandbox test user (steps 2, 5)                 |
 | Token refresh fails                         | Refresh token expired → re-run the login helper                                            |
 | `unaudited_client_can_only_post_to_private` | Direct mode only — expected until audit; keep `privacy_level: SELF_ONLY` or use inbox mode |
