@@ -14,7 +14,7 @@ from src.compositor import compose
 from src.config import load_config
 from src.models.image_client import get_image_client
 from src.models.text_client import get_text_client
-from src.publisher import publish_to_instagram
+from src.publisher import build_panel_reel, publish_to_instagram
 from src.publisher_tiktok import publish_to_tiktok
 from src.style import STYLES_DIR, load_style
 
@@ -122,6 +122,19 @@ async def run_pipeline(
     comic_paths = compose(plot, scenes_sorted, output_dir, cfg.compositor)
     for p in comic_paths:
         print(f"      Saved → {p}")
+
+    print("\n[3.5/3] Building panel-by-panel reel...")
+    try:
+        panel_reel_path = build_panel_reel(
+            comic_paths,
+            plot,
+            output_dir,
+            cfg.compositor,
+            cfg.compositor.panel_seconds,
+        )
+        print(f"      Saved → {panel_reel_path}")
+    except Exception as e:
+        print(f"      Panel reel generation failed: {e}", file=sys.stderr)
 
     print(f"\nDone! Output folder: {output_dir}")
 

@@ -1,9 +1,20 @@
 from pathlib import Path
+from dataclasses import dataclass
 from PIL import Image
 
 from src.agents.plot_agent import PlotResult
 from src.agents.scene_agent import SceneResult
 from src.config import CompositorConfig
+
+
+@dataclass
+class PanelBounds:
+    panel_index: int
+    page_num: int
+    x: int
+    y: int
+    width: int
+    height: int
 
 
 def _letterbox(img: Image.Image, panel_w: int, panel_h: int) -> Image.Image:
@@ -32,6 +43,51 @@ def _distribute(total: int, weights: list[float], gap: int) -> list[int]:
     # assign leftover pixels to the last slot to absorb rounding error
     sizes[-1] = usable - sum(sizes[:-1])
     return sizes
+
+
+def calculate_panel_bounds(
+    plot: PlotResult,
+    cfg: CompositorConfig,
+) -> list[PanelBounds]:
+    """Calculate pixel bounds for every panel in reading order."""
+    canvas_w = cfg.canvas_width
+    canvas_h = cfg.canvas_height
+    gap = cfg.gap_px
+    margin = cfg.margin_px
+
+    bounds: list[PanelBounds] = []
+    for page_num, page in enumerate(plot.layout.pages, start=1):
+        row_heights = _distribute(
+            canvas_h - 2 * margin,
+            [r.height_weight for r in page.rows],
+            gap,
+        )
+
+        y = margin
+        for row, row_h in zip(page.rows, row_heights):
+            panel_widths = _distribute(
+                canvas_w - 2 * margin,
+                [p.weight for p in row.panels],
+                gap,
+            )
+
+            x = margin
+            for panel_spec, panel_w in zip(row.panels, panel_widths):
+                bounds.append(
+                    PanelBounds(
+                        panel_index=panel_spec.panel_index,
+                        page_num=page_num,
+                        x=x,
+                        y=y,
+                        width=panel_w,
+                        height=row_h,
+                    )
+                )
+                x += panel_w + gap
+
+            y += row_h + gap
+
+    return bounds
 
 
 def compose(

@@ -17,7 +17,8 @@ from pathlib import Path
 from PIL import Image
 
 from src.agents.plot_agent import PlotResult
-from src.config import InstagramConfig
+from src.compositor import calculate_panel_bounds
+from src.config import CompositorConfig, InstagramConfig
 
 # Instagram reels/stories are 9:16. 1080x1920 is the standard upload size.
 FRAME_W, FRAME_H = 1080, 1920
@@ -108,6 +109,90 @@ def build_reel(pages: list[Path], output_dir: Path, seconds_per_page: float) -> 
         raise RuntimeError(f"ffmpeg failed to build the reel:\n{e.stderr}") from e
 
     return reel_path
+
+
+def build_panel_reel(
+    pages: list[Path],
+    plot: PlotResult,
+    output_dir: Path,
+    compositor_cfg: CompositorConfig,
+    seconds_per_panel: float,
+) -> Path:
+    """Render a panel-by-panel 9:16 slideshow panel_reel.mp4 via ffmpeg."""
+    if not pages:
+        raise ValueError("No comic pages available for panel reel.")
+
+    ffmpeg = _ffmpeg_exe()
+    page_by_num = {i: p for i, p in enumerate(pages, start=1)}
+    panel_bounds = calculate_panel_bounds(plot, compositor_cfg)
+    if not panel_bounds:
+        raise ValueError("No panel layout found for panel reel generation.")
+
+    frames_dir = output_dir / "panel_frames"
+    frames_dir.mkdir(parents=True, exist_ok=True)
+
+    frame_paths: list[Path] = []
+    current_page_num = None
+    current_img = None
+
+    try:
+        for i, bounds in enumerate(panel_bounds, start=1):
+            page_path = page_by_num.get(bounds.page_num)
+            if page_path is None:
+                raise ValueError(f"Missing page image for page {bounds.page_num}.")
+
+            if current_page_num != bounds.page_num:
+                if current_img is not None:
+                    current_img.close()
+                current_img = Image.open(page_path).convert("RGB")
+                current_page_num = bounds.page_num
+
+            crop_box = (
+                bounds.x,
+                bounds.y,
+                bounds.x + bounds.width,
+                bounds.y + bounds.height,
+            )
+            panel_frame = current_img.crop(crop_box)
+            frame_path = frames_dir / f"panel_{i:03d}.png"
+            panel_frame.save(frame_path, format="PNG", optimize=True)
+            frame_paths.append(frame_path)
+    finally:
+        if current_img is not None:
+            current_img.close()
+
+    lines: list[str] = []
+    for frame_path in frame_paths:
+        lines.append(f"file '{frame_path.resolve().as_posix()}'")
+        lines.append(f"duration {seconds_per_panel}")
+    lines.append(f"file '{frame_paths[-1].resolve().as_posix()}'")
+
+    list_path = output_dir / "panel_reel_frames.txt"
+    list_path.write_text("\n".join(lines))
+
+    panel_reel_path = output_dir / "panel_reel.mp4"
+    vf = (
+        f"scale={FRAME_W}:-2,"
+        f"pad={FRAME_W}:{FRAME_H}:(ow-iw)/2:(oh-ih)/2:color=black,"
+        f"setsar=1,format=yuv420p"
+    )
+    cmd = [
+        ffmpeg, "-y",
+        "-f", "concat", "-safe", "0", "-i", str(list_path),
+        "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
+        "-shortest",
+        "-vf", vf,
+        "-r", "30",
+        "-c:v", "libx264", "-c:a", "aac",
+        "-movflags", "+faststart",
+        str(panel_reel_path),
+    ]
+    try:
+        subprocess.run(cmd, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"ffmpeg failed to build the panel reel:\n{e.stderr}") from e
+
+    return panel_reel_path
 
 
 def login(cfg: InstagramConfig):

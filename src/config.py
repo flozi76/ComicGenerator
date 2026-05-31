@@ -68,6 +68,7 @@ class CompositorConfig:
     canvas_height: int = 3200
     gap_px: int = 8
     margin_px: int = 24
+    panel_seconds: float = 3.0
 
 
 @dataclass
@@ -151,6 +152,7 @@ def load_config(path: Path = Path("config.yml")) -> Config:
         canvas_height=raw.get("compositor", {}).get("canvas_height", 3200),
         gap_px=raw.get("compositor", {}).get("gap_px", 8),
         margin_px=raw.get("compositor", {}).get("margin_px", 24),
+        panel_seconds=raw.get("compositor", {}).get("panel_seconds", 3.0),
     )
     ig_raw = raw.get("instagram", {}) or {}
     instagram = InstagramConfig(

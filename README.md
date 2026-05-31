@@ -23,7 +23,8 @@ output/
         │   ├── scene_01.png
         │   └── ...
         ├── comic-001.png      ← page 1
-        └── comic-002.png      ← page 2 (if multi-page)
+        ├── comic-002.png      ← page 2 (if multi-page)
+        └── panel_reel.mp4     ← panel-by-panel slideshow reel
 ```
 
 ## Setup
@@ -89,6 +90,8 @@ To add a new style, create `Styles/my-style.md` and run with `--style my-style`.
 ## Multi-page output
 
 When `--panels N` produces more than ~10 panels, the model splits them into pages of 4–10 panels each. Pages are composited independently and saved as `comic-001.png`, `comic-002.png`, etc. Individual panel images are always saved to the `panels/` subfolder.
+
+Every run also generates `panel_reel.mp4`, a 9:16 video that cuts from one panel to the next in reading order (top-to-bottom, left-to-right across pages). You can control per-panel duration with `compositor.panel_seconds` in `config.yml`.
 
 ## Switching providers and models
 

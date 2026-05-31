@@ -1,63 +1,64 @@
 # Pick which configured provider handles each role.
 # The actual model is taken from that provider's text_model / image_model below.
 providers:
-  plot_provider: openai          # provider for plot generation:    openai | anthropic
-  scene_provider: openai         # provider for scene descriptions: openai | anthropic
-  image_provider: openai         # provider for image generation:   openai | black_forest_labs | fal
+  plot_provider: openai # provider for plot generation:    openai | anthropic
+  scene_provider: openai # provider for scene descriptions: openai | anthropic
+  image_provider: openai # provider for image generation:   openai | black_forest_labs | fal
 
 openai:
-  api_key: ""                    # set your OpenAI key here (or in config.yml)
-  text_model: gpt-4o             # gpt-4o | gpt-4o-mini | gpt-4-turbo
-  image_model: gpt-image-1       # gpt-image-1 | gpt-image-1-mini (dall-e-2/3 retired May 12 2026)
+  api_key: "" # set your OpenAI key here (or in config.yml)
+  text_model: gpt-4o # gpt-4o | gpt-4o-mini | gpt-4-turbo
+  image_model: gpt-image-1 # gpt-image-1 | gpt-image-1-mini (dall-e-2/3 retired May 12 2026)
   image_size: "1024x1024"
   image_quality: standard
-  image_moderation: auto         # gpt-image-* only: auto | low (use "low" if prompts get moderation_blocked)
-  max_concurrent_images: 4       # global cap for parallel image calls (~5 req/min on default tiers)
+  image_moderation: auto # gpt-image-* only: auto | low (use "low" if prompts get moderation_blocked)
+  max_concurrent_images: 4 # global cap for parallel image calls (~5 req/min on default tiers)
 
 anthropic:
-  api_key: ""                    # required when plot_provider or scene_provider is "anthropic"
-  text_model: claude-sonnet-4-6  # claude-opus-4-8 | claude-sonnet-4-6 | claude-haiku-4-5
+  api_key: "" # required when plot_provider or scene_provider is "anthropic"
+  text_model: claude-sonnet-4-6 # claude-opus-4-8 | claude-sonnet-4-6 | claude-haiku-4-5
 
 black_forest_labs:
-  api_key: ""                    # required when image_provider is "black_forest_labs"
-  image_model: flux-pro-1.1      # flux-pro-1.1 | flux-pro | flux-dev
+  api_key: "" # required when image_provider is "black_forest_labs"
+  image_model: flux-pro-1.1 # flux-pro-1.1 | flux-pro | flux-dev
 
 fal:
-  api_key: ""                    # required when image_provider is "fal" (get one at fal.ai/dashboard/keys)
-  image_model: fal-ai/flux/dev   # full fal path: fal-ai/flux/dev | fal-ai/flux/schnell | fal-ai/flux-pro/v1.1 | fal-ai/stable-diffusion-v35-large | fal-ai/bytedance/seedream/v4/text-to-image (~$0.03/img)
-  image_size: square_hd          # square_hd | square | portrait_4_3 | landscape_4_3 | portrait_16_9 | landscape_16_9 (seedream also: auto | auto_2K | auto_4K)
-  enable_safety_checker: false   # false = no NSFW filter (more permissive; avoids blacked-out images)
+  api_key: "" # required when image_provider is "fal" (get one at fal.ai/dashboard/keys)
+  image_model: fal-ai/flux/dev # full fal path: fal-ai/flux/dev | fal-ai/flux/schnell | fal-ai/flux-pro/v1.1 | fal-ai/stable-diffusion-v35-large | fal-ai/bytedance/seedream/v4/text-to-image (~$0.03/img)
+  image_size: square_hd # square_hd | square | portrait_4_3 | landscape_4_3 | portrait_16_9 | landscape_16_9 (seedream also: auto | auto_2K | auto_4K)
+  enable_safety_checker: false # false = no NSFW filter (more permissive; avoids blacked-out images)
 
 compositor:
   canvas_width: 2400
   canvas_height: 3200
-  gap_px: 8                      # gutter between panels
-  margin_px: 24                  # outer page margin
+  gap_px: 8 # gutter between panels
+  margin_px: 24 # outer page margin
+  panel_seconds: 3 # how long each panel is shown in panel_reel.mp4
 
 # TikTok publishing (active). See tiktok-setup.md for the one-time app + token setup.
 tiktok:
-  enabled: false                 # true = ask "Publish to TikTok?" after generation
-  mode: inbox                    # inbox (upload to drafts, NO app review) | direct (post to profile, needs audit)
-  client_key: ""                 # from your app at https://developers.tiktok.com/apps/
-  client_secret: ""              # from your app at https://developers.tiktok.com/apps/
-  token_file: tiktok_token.json  # written by `python3 scripts/tiktok_login.py` after you authorize
-  access_token: ""               # optional; normally left blank — token_file is used instead
+  enabled: false # true = ask "Publish to TikTok?" after generation
+  mode: inbox # inbox (upload to drafts, NO app review) | direct (post to profile, needs audit)
+  client_key: "" # from your app at https://developers.tiktok.com/apps/
+  client_secret: "" # from your app at https://developers.tiktok.com/apps/
+  token_file: tiktok_token.json # written by `python3 scripts/tiktok_login.py` after you authorize
+  access_token: "" # optional; normally left blank — token_file is used instead
   refresh_token: ""
-  seconds_per_page: 3            # how long each comic page is shown in the reel slideshow
+  seconds_per_page: 3 # how long each comic page is shown in the reel slideshow
   # --- direct mode only ---
-  privacy_level: SELF_ONLY       # SELF_ONLY | PUBLIC_TO_EVERYONE | MUTUAL_FOLLOW_FRIENDS (unaudited apps: SELF_ONLY)
-  caption: "{title}\n\n{tagline}"  # video caption; {title} and {tagline} are substituted
+  privacy_level: SELF_ONLY # SELF_ONLY | PUBLIC_TO_EVERYONE | MUTUAL_FOLLOW_FRIENDS (unaudited apps: SELF_ONLY)
+  caption: "{title}\n\n{tagline}" # video caption; {title} and {tagline} are substituted
 
 # Instagram publishing (legacy, unofficial instagrapi). Only used if tiktok.enabled is false.
 instagram:
-  enabled: false                 # true = ask "Publish to Instagram?" after generation
-  username: ""                   # your Instagram handle
-  password: ""                   # your Instagram password (requires `pip install instagrapi` and ffmpeg)
-  session_file: instagram_session.json  # cached login session (avoids re-login / checkpoint prompts)
-  seconds_per_page: 3            # how long each comic page is shown in the reel slideshow
-  publish_reel: true             # publish a slideshow reel of the page(s)
-  publish_story: true            # publish each page as a 9:16 story frame
-  caption: "{title}\n\n{tagline}"  # caption template; {title} and {tagline} are substituted
+  enabled: false # true = ask "Publish to Instagram?" after generation
+  username: "" # your Instagram handle
+  password: "" # your Instagram password (requires `pip install instagrapi` and ffmpeg)
+  session_file: instagram_session.json # cached login session (avoids re-login / checkpoint prompts)
+  seconds_per_page: 3 # how long each comic page is shown in the reel slideshow
+  publish_reel: true # publish a slideshow reel of the page(s)
+  publish_story: true # publish each page as a 9:16 story frame
+  caption: "{title}\n\n{tagline}" # caption template; {title} and {tagline} are substituted
 
 output:
-  base_dir: output               # relative to project root
+  base_dir: output # relative to project root

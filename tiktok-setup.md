@@ -7,7 +7,7 @@ Get the TikTok publisher working. End goal: fill these in `config.yml` →
 
 …then run `python3 scripts/tiktok_login.py` once to authorize (it writes `tiktok_token.json`).
 
-We use **inbox/draft mode**: the app uploads your comic reel to your TikTok **drafts**, and you tap *Post* in the TikTok app. This path works **without TikTok app review** — the painful audit that Direct Post needs.
+We use **inbox/draft mode**: the app uploads your comic reel to your TikTok **drafts**, and you tap _Post_ in the TikTok app. This path works **without TikTok app review** — the painful audit that Direct Post needs.
 
 > Temporary scratch guide — delete once you're set up.
 
@@ -15,9 +15,9 @@ We use **inbox/draft mode**: the app uploads your comic reel to your TikTok **dr
 
 ## 0. Prerequisites
 
-- [ ] A TikTok account (any normal account works for inbox mode)
-- [ ] `pip install -r requirements.txt` (adds `requests`)
-- [ ] ffmpeg installed (`brew install ffmpeg`) — builds the reel video
+- [x] A TikTok account (any normal account works for inbox mode)
+- [x] `pip install -r requirements.txt` (adds `requests`)
+- [x] ffmpeg installed (`brew install ffmpeg`) — builds the reel video
 
 ---
 
@@ -36,7 +36,7 @@ We use **inbox/draft mode**: the app uploads your comic reel to your TikTok **dr
 
 1. In your app → **Add products** → add **Content Posting API**.
 2. In the app's **Scopes**, enable:
-   - `video.upload`  ← required for inbox/draft mode
+   - `video.upload` ← required for inbox/draft mode
    - (`video.publish` is only needed for Direct Post, which requires audit — skip it for now)
 3. Also make sure **Login Kit** is available (it's how we authorize). Enable scope `user.info.basic` if offered.
 
@@ -96,11 +96,13 @@ python3 scripts/tiktok_login.py
 ```
 
 What happens:
+
 1. Your browser opens the TikTok authorization page → approve.
 2. TikTok redirects to `http://127.0.0.1:8080/callback`; the helper catches it.
 3. It exchanges the code and writes **`tiktok_token.json`** (access + refresh token).
 
 If the browser didn't open, copy the printed URL manually. If you registered a different redirect URI, run:
+
 ```bash
 python3 scripts/tiktok_login.py --redirect-uri http://localhost:8080/callback
 ```
@@ -116,12 +118,14 @@ python -m src.main --idea "A vampire detective investigates a murder at a midnig
 ```
 
 Or generate, then answer the prompt (since `enabled: true`):
+
 ```bash
 python -m src.main --idea "..."
 # → Publish to TikTok? [y/N]
 ```
 
 Expected console flow:
+
 ```
 [4/4] Publishing to TikTok...
       Building reel video...
@@ -138,6 +142,7 @@ Then on your phone: open TikTok → **Inbox/Notifications** (or Profile → draf
 ## Going public automatically (later, optional)
 
 To skip the manual tap and post straight to the profile, switch to Direct Post:
+
 - Set `tiktok.mode: direct`, enable scope `video.publish`, re-run `scripts/tiktok_login.py`.
 - **Requires TikTok app audit.** Until audited, direct posts are forced to `privacy_level: SELF_ONLY` (only you see them). `tiktok.privacy_level` controls this.
 
@@ -145,13 +150,13 @@ To skip the manual tap and post straight to the profile, switch to Direct Post:
 
 ## Troubleshooting
 
-| Symptom | Fix |
-|---|---|
-| `client_key / client_secret are not set` | Fill them in config.yml (step 4) |
-| `No TikTok access token found` | Run `python3 scripts/tiktok_login.py` (step 6) |
-| Redirect URI mismatch error in browser | The URI in step 3 must **exactly** match the one the script uses (`--redirect-uri`) |
-| `scope_not_authorized` / upload rejected | `video.upload` not enabled, or you're not a Sandbox test user (steps 2, 5) |
-| Token refresh fails | Refresh token expired → re-run the login helper |
+| Symptom                                     | Fix                                                                                        |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `client_key / client_secret are not set`    | Fill them in config.yml (step 4)                                                           |
+| `No TikTok access token found`              | Run `python3 scripts/tiktok_login.py` (step 6)                                             |
+| Redirect URI mismatch error in browser      | The URI in step 3 must **exactly** match the one the script uses (`--redirect-uri`)        |
+| `scope_not_authorized` / upload rejected    | `video.upload` not enabled, or you're not a Sandbox test user (steps 2, 5)                 |
+| Token refresh fails                         | Refresh token expired → re-run the login helper                                            |
 | `unaudited_client_can_only_post_to_private` | Direct mode only — expected until audit; keep `privacy_level: SELF_ONLY` or use inbox mode |
 
 ## Notes / limits
