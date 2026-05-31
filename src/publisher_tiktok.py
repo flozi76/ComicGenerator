@@ -19,10 +19,11 @@ API reference: https://developers.tiktok.com/doc/content-posting-api-get-started
 import json
 import time
 from pathlib import Path
+from typing import Optional
 
 from src.agents.plot_agent import PlotResult
-from src.config import TikTokConfig
-from src.publisher import build_reel, _format_caption
+from src.config import CompositorConfig, TikTokConfig
+from src.publisher import build_panel_reel, build_reel, _format_caption
 
 API = "https://open.tiktokapis.com/v2"
 TOKEN_URL = f"{API}/oauth/token/"
@@ -137,13 +138,50 @@ def _source_info(video: Path) -> dict:
     }
 
 
+def _upload_one(
+    access_token: str,
+    video: Path,
+    label: str,
+    cfg: TikTokConfig,
+    plot: PlotResult,
+) -> None:
+    """Init + upload a single video to TikTok (draft or direct)."""
+    if cfg.mode == "direct":
+        body = {
+            "post_info": {
+                "title": _format_caption(cfg.caption, plot)[:2200],
+                "privacy_level": cfg.privacy_level,
+                "disable_comment": False,
+                "disable_duet": False,
+                "disable_stitch": False,
+            },
+            "source_info": _source_info(video),
+        }
+        print(f"      Initializing TikTok direct post ({label})...")
+        data = _init(access_token, body, "video/init/")
+        print(f"      Uploading {label} to TikTok...")
+        _upload_file(data["upload_url"], video)
+        print(f"      Direct post submitted (publish_id={data.get('publish_id')}).")
+    else:
+        body = {"source_info": _source_info(video)}
+        print(f"      Initializing TikTok draft upload ({label})...")
+        data = _init(access_token, body, "inbox/video/init/")
+        print(f"      Uploading {label} to TikTok...")
+        _upload_file(data["upload_url"], video)
+        print(f"      {label} → TikTok drafts (publish_id={data.get('publish_id')}).")
+
+
 def publish_to_tiktok(
     plot: PlotResult,
     pages: list[Path],
     output_dir: Path,
     cfg: TikTokConfig,
+    compositor_cfg: Optional[CompositorConfig] = None,
 ) -> None:
-    """Render the pages to a reel and upload it to TikTok (draft or direct post)."""
+    """Render the pages to reels and upload both to TikTok (draft or direct post).
+
+    Uploads panel_reel.mp4 first (panel-by-panel), then reel.mp4 (full-page slideshow).
+    """
     if not pages:
         raise ValueError("No comic pages to publish.")
     if not (cfg.client_key and cfg.client_secret):
@@ -156,31 +194,19 @@ def publish_to_tiktok(
     tokens = _refresh_if_needed(cfg, _load_tokens(cfg))
     access_token = tokens["access_token"]
 
-    print("      Building reel video...")
-    video = build_reel(pages, output_dir, cfg.seconds_per_page)
+    if compositor_cfg is not None:
+        print("      Building panel reel video...")
+        try:
+            panel_video = build_panel_reel(
+                pages, plot, output_dir, compositor_cfg, compositor_cfg.panel_seconds
+            )
+            _upload_one(access_token, panel_video, "panel_reel.mp4", cfg, plot)
+        except Exception as e:
+            print(f"      Panel reel upload failed: {e}")
 
-    if cfg.mode == "direct":
-        body = {
-            "post_info": {
-                "title": _format_caption(cfg.caption, plot)[:2200],
-                "privacy_level": cfg.privacy_level,
-                "disable_comment": False,
-                "disable_duet": False,
-                "disable_stitch": False,
-            },
-            "source_info": _source_info(video),
-        }
-        print("      Initializing TikTok direct post...")
-        data = _init(access_token, body, "video/init/")
-        print("      Uploading video to TikTok...")
-        _upload_file(data["upload_url"], video)
-        print(f"      Direct post submitted (publish_id={data.get('publish_id')}). "
-              f"TikTok is processing it; check your profile/notifications.")
-    else:
-        body = {"source_info": _source_info(video)}
-        print("      Initializing TikTok draft upload...")
-        data = _init(access_token, body, "inbox/video/init/")
-        print("      Uploading video to TikTok...")
-        _upload_file(data["upload_url"], video)
-        print(f"      Uploaded to your TikTok drafts (publish_id={data.get('publish_id')}).")
+    print("      Building full-page reel video...")
+    reel_video = build_reel(pages, output_dir, cfg.seconds_per_page)
+    _upload_one(access_token, reel_video, "reel.mp4", cfg, plot)
+
+    if cfg.mode == "inbox":
         print("      → Open the TikTok app → Inbox/Notifications → finish & post.")
