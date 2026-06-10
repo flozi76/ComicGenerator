@@ -35,7 +35,7 @@ Defining visual characteristics:
 The following text is appended to every DALL-E / Flux image prompt when this style is active.
 
 ```
-Black and white only, absolutely no color. Classic Japanese manga print style: precise pen-and-ink linework with bold varying line weights, screentone dot shading for mid-tones, heavy cross-hatching in shadow areas, stark beta-nori black fills. Extreme chiaroscuro contrast, open white paper highlights. Cinematic composition — dynamic angles, speed lines, dramatic close-ups. Expressive character faces with large detailed eyes. Richly detailed backgrounds. Kentaro Miura and Takehiko Inoue aesthetic.
+Full color. Classic Japanese manga print style: precise pen-and-ink linework with bold varying line weights, screentone dot shading for mid-tones, heavy cross-hatching in shadow areas, stark beta-nori black fills. Extreme chiaroscuro contrast, open white paper highlights. Cinematic composition — dynamic angles, speed lines, dramatic close-ups. Expressive character faces with large detailed eyes. Richly detailed backgrounds. Kentaro Miura and Takehiko Inoue aesthetic.
 ```
 
 **Hard constraint** (always appended last, never omit):

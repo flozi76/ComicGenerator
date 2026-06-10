@@ -27,6 +27,8 @@ fal:
   image_model: fal-ai/flux/dev # full fal path: fal-ai/flux/dev | fal-ai/flux/schnell | fal-ai/flux-pro/v1.1 | fal-ai/stable-diffusion-v35-large | fal-ai/bytedance/seedream/v4/text-to-image (~$0.03/img)
   image_size: square_hd # square_hd | square | portrait_4_3 | landscape_4_3 | portrait_16_9 | landscape_16_9 (seedream also: auto | auto_2K | auto_4K)
   enable_safety_checker: false # false = no NSFW filter (more permissive; avoids blacked-out images)
+  music_enabled: false # true = generate story-aligned background music for the panel reel (requires fal.api_key)
+  music_model: fal-ai/stable-audio # fal model for music; stable-audio generates up to 47s (looped if video is longer)
 
 compositor:
   canvas_width: 2400
@@ -48,9 +50,13 @@ tiktok:
   access_token: "" # optional; normally left blank — token_file is used instead
   refresh_token: ""
   seconds_per_page: 3 # how long each comic page is shown in the reel slideshow
+  caption: "{title}\n\n{tagline}" # caption template for both inbox and direct; {title} and {tagline} are substituted
+  hashtags:                  # appended to the caption as #tag1 #tag2 … (both inbox and direct)
+    - comicbook
+    - aicomic
+    - noircomic
   # --- direct mode only ---
   privacy_level: SELF_ONLY # SELF_ONLY | PUBLIC_TO_EVERYONE | MUTUAL_FOLLOW_FRIENDS (unaudited apps: SELF_ONLY)
-  caption: "{title}\n\n{tagline}" # video caption; {title} and {tagline} are substituted
 
 # Instagram publishing (legacy, unofficial instagrapi). Only used if tiktok.enabled is false.
 instagram:

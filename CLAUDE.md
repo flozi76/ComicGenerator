@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 A Python console application that generates a single-page noir/horror comic from a text idea. It runs a three-step pipeline:
 1. **Plot agent** (sync): GPT-4o generates title, tagline, panel count (4–12), page layout, and scene beats
 2. **Scene agents** (async, parallel): one coroutine per scene expands a beat into caption + image prompt, then generates a DALL-E 3 image
-3. **Compositor**: Pillow stitches all panel images into one greyscale `comic.png`
+3. **Compositor**: Pillow stitches all panel images into one `comic.png`
 4. **Publisher** (optional): after generation, offers to publish the page(s) as a video. Active target is **TikTok** (Content Posting API — renders the pages into a reel MP4 and uploads it; default `inbox` mode lands in TikTok drafts so no app review is needed). A legacy **Instagram** path (`instagrapi`, disabled by default) remains for reference.
 
 `Idea/noir-comic-generator.jsx` is a React prototype for reference — it is not used by the Python app.
@@ -65,8 +65,8 @@ Optional final step. After compositing, `main.py` picks a target: if `tiktok.ena
 ### Layout system
 The plot agent asks GPT-4o to return a **weighted row layout** — a JSON structure where each row has a `height_weight` and each panel within a row has a `weight`. The compositor translates these weights into pixel dimensions using simple proportional arithmetic. The layout drives which scenes go where and at what aspect ratio.
 
-### Image greyscale enforcement
-DALL-E 3 often ignores "black and white" prompts and returns warm/sepia images. The compositor calls `.convert("L")` on every downloaded image unconditionally — this is the authoritative greyscale step, not the prompt.
+### Image color handling
+Whether images are black-and-white or color is controlled entirely by the style's image prompt suffix. Styles like `dylan-dog` include "Black and white only, absolutely no color." in their suffix; other styles (e.g. `enki-bilal`, `milo-manara`, `hugo-pratt`, `magnus`, `manga`) produce color images. The compositor does not apply any color conversion — it uses `.convert("RGB")` to normalise format only.
 
 ### Rate limiting
 `asyncio.Semaphore(cfg.openai.max_concurrent_images)` caps parallel image calls (default: 4) to stay within DALL-E 3's ~5 req/min limit on default API tiers. Adjust in `config.yml`.

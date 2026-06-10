@@ -13,6 +13,7 @@ relies on it internally for video uploads.
 import shutil
 import subprocess
 from pathlib import Path
+from typing import Optional
 
 from PIL import Image
 
@@ -117,6 +118,7 @@ def build_panel_reel(
     output_dir: Path,
     compositor_cfg: CompositorConfig,
     seconds_per_panel: float,
+    audio_path: Optional[Path] = None,
 ) -> Path:
     """Render a panel-by-panel 9:16 slideshow panel_reel.mp4 via ffmpeg."""
     if not pages:
@@ -171,17 +173,35 @@ def build_panel_reel(
     list_path.write_text("\n".join(lines))
 
     panel_reel_path = output_dir / "panel_reel.mp4"
+    # Always scale to FRAME_W wide (upscaling if needed), then center-crop if taller
+    # than FRAME_H (very tall portrait panels), and pad top/bottom with black otherwise.
+    # The old force_original_aspect_ratio=decrease approach would give sub-1080 width
+    # for portrait panels taller than the 9:16 frame ratio.
     vf = (
         f"scale={FRAME_W}:-2,"
+        f"crop={FRAME_W}:min(ih\\,{FRAME_H}):0:(ih-min(ih\\,{FRAME_H}))/2,"
         f"pad={FRAME_W}:{FRAME_H}:(ow-iw)/2:(oh-ih)/2:color=black,"
         f"setsar=1,format=yuv420p"
     )
+
+    total_duration = len(frame_paths) * seconds_per_panel
+    fade_start = max(0.0, total_duration - 2.0)
+
+    if audio_path:
+        # Loop the audio track so it covers any video length; fade out the last 2s.
+        audio_inputs = ["-stream_loop", "-1", "-i", str(audio_path)]
+        audio_filter = ["-af", f"afade=t=out:st={fade_start:.2f}:d=2"]
+    else:
+        audio_inputs = ["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100"]
+        audio_filter = []
+
     cmd = [
         ffmpeg, "-y",
         "-f", "concat", "-safe", "0", "-i", str(list_path),
-        "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
+        *audio_inputs,
         "-shortest",
         "-vf", vf,
+        *audio_filter,
         "-r", "30",
         "-c:v", "libx264", "-c:a", "aac",
         "-movflags", "+faststart",

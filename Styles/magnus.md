@@ -31,7 +31,7 @@ Magnus (Roberto Raviola, 1939–1996) was an Italian comics master known for his
 The following text is appended to every DALL-E / Flux image prompt when this style is active.
 
 ```
-Black and white only, absolutely no color. Highly detailed pen-and-ink comic art in the style of Magnus (Roberto Raviola): obsessive ornamental linework, dense fine hatching, engraving-like precision, crisp graphic black-and-white contrast. Exotic pulp-fantasy atmosphere — opulent Orientalist palaces, labyrinthine cities, decadent interiors, theatrical menace. Bold design-driven composition, intricate decorative detail, classic Italian fumetti illustration.
+Full color. Highly detailed pen-and-ink comic art in the style of Magnus (Roberto Raviola): obsessive ornamental linework, dense fine hatching, engraving-like precision, crisp graphic black-and-white contrast. Exotic pulp-fantasy atmosphere — opulent Orientalist palaces, labyrinthine cities, decadent interiors, theatrical menace. Bold design-driven composition, intricate decorative detail, classic Italian fumetti illustration.
 ```
 
 **Hard constraint** (always appended last, never omit):

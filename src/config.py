@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from typing import List
 from pathlib import Path
 import yaml
 
@@ -32,6 +33,8 @@ class FalConfig:
     image_model: str = "fal-ai/flux/dev"   # full fal model path
     image_size: str = "square_hd"          # square_hd | square | portrait_4_3 | landscape_4_3 | ...
     enable_safety_checker: bool = False    # False = no NSFW filter (permissive); avoids blacked-out images
+    music_enabled: bool = False            # True = generate background music for the panel reel
+    music_model: str = "fal-ai/stable-audio"  # fal model for music generation
 
 
 @dataclass
@@ -59,7 +62,8 @@ class TikTokConfig:
     mode: str = "inbox"                          # inbox (draft, no review) | direct (public/SELF_ONLY, needs audit)
     seconds_per_page: float = 3.0                # how long each page is shown in the reel
     privacy_level: str = "SELF_ONLY"             # direct mode only: SELF_ONLY | PUBLIC_TO_EVERYONE | MUTUAL_FOLLOW_FRIENDS
-    caption: str = "{title}\n\n{tagline}"        # direct mode only: caption template
+    caption: str = "{title}\n\n{tagline}"        # caption template; {title} and {tagline} are substituted
+    hashtags: List[str] = field(default_factory=list)  # appended to caption as #tag1 #tag2 …
 
 
 @dataclass
@@ -146,6 +150,8 @@ def load_config(path: Path = Path("config.yml")) -> Config:
         image_model=raw.get("fal", {}).get("image_model", "fal-ai/flux/dev"),
         image_size=raw.get("fal", {}).get("image_size", "square_hd"),
         enable_safety_checker=raw.get("fal", {}).get("enable_safety_checker", False),
+        music_enabled=raw.get("fal", {}).get("music_enabled", False),
+        music_model=raw.get("fal", {}).get("music_model", "fal-ai/stable-audio"),
     )
     compositor = CompositorConfig(
         canvas_width=raw.get("compositor", {}).get("canvas_width", 2400),
@@ -177,6 +183,7 @@ def load_config(path: Path = Path("config.yml")) -> Config:
         seconds_per_page=tt_raw.get("seconds_per_page", 3.0),
         privacy_level=tt_raw.get("privacy_level", "SELF_ONLY"),
         caption=tt_raw.get("caption", "{title}\n\n{tagline}"),
+        hashtags=tt_raw.get("hashtags", []) or [],
     )
     output_base_dir = Path(raw.get("output", {}).get("base_dir", "output"))
 

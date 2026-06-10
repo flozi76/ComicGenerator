@@ -14,6 +14,7 @@ from src.compositor import compose
 from src.config import load_config
 from src.models.image_client import get_image_client
 from src.models.text_client import get_text_client
+from src.music import generate_music
 from src.publisher import build_panel_reel, publish_to_instagram
 from src.publisher_tiktok import publish_to_tiktok
 from src.style import STYLES_DIR, load_style
@@ -123,6 +124,21 @@ async def run_pipeline(
     for p in comic_paths:
         print(f"      Saved → {p}")
 
+    music_path: Optional[Path] = None
+    if cfg.fal.music_enabled:
+        print("\n[3.5a/3] Generating background music...")
+        try:
+            music_path = await generate_music(
+                plot=plot,
+                style_name=style_name,
+                duration=plot.panel_count * cfg.compositor.panel_seconds,
+                api_key=cfg.fal.api_key,
+                output_dir=output_dir,
+                model=cfg.fal.music_model,
+            )
+        except Exception as e:
+            print(f"      Music generation failed (continuing without music): {e}", file=sys.stderr)
+
     print("\n[3.5/3] Building panel-by-panel reel...")
     try:
         panel_reel_path = build_panel_reel(
@@ -131,6 +147,7 @@ async def run_pipeline(
             output_dir,
             cfg.compositor,
             cfg.compositor.panel_seconds,
+            audio_path=music_path,
         )
         print(f"      Saved → {panel_reel_path}")
     except Exception as e:
@@ -156,17 +173,17 @@ async def run_pipeline(
         if do_publish:
             print(f"\n[4/4] Publishing to {target}...")
             try:
-                do(plot, comic_paths, output_dir, cfg)
+                do(plot, comic_paths, output_dir, cfg, audio_path=music_path)
                 print(f"      Published to {target}.")
             except Exception as e:
                 print(f"      {target} publishing failed: {e}", file=sys.stderr)
 
 
-def _do_publish_tiktok(plot, comic_paths, output_dir, cfg) -> None:
-    publish_to_tiktok(plot, comic_paths, output_dir, cfg.tiktok, cfg.compositor)
+def _do_publish_tiktok(plot, comic_paths, output_dir, cfg, audio_path=None) -> None:
+    publish_to_tiktok(plot, comic_paths, output_dir, cfg.tiktok, cfg.compositor, audio_path=audio_path)
 
 
-def _do_publish_instagram(plot, comic_paths, output_dir, cfg) -> None:
+def _do_publish_instagram(plot, comic_paths, output_dir, cfg, audio_path=None) -> None:
     publish_to_instagram(plot, comic_paths, output_dir, cfg.instagram)
 
 

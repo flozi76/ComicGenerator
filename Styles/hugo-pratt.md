@@ -31,7 +31,7 @@ Hugo Pratt is an Italian comics master, creator of *Corto Maltese* (from 1967), 
 The following text is appended to every DALL-E / Flux image prompt when this style is active.
 
 ```
-Black and white only, absolutely no color. Brush-and-ink adventure comic art in the style of Hugo Pratt's Corto Maltese: spare elegant brushwork, bold flat black shapes against open white space, minimal detail, expressive economy of line. Early-20th-century exotic seafaring atmosphere — harbours, schooners, tropical coasts, distant horizons. Airy cinematic composition, romantic and wistful, classic European graphic novel illustration.
+Full color. Brush-and-ink adventure comic art in the style of Hugo Pratt's Corto Maltese: spare elegant brushwork, bold flat black shapes against open white space, minimal detail, expressive economy of line. Early-20th-century exotic seafaring atmosphere — harbours, schooners, tropical coasts, distant horizons. Airy cinematic composition, romantic and wistful, classic European graphic novel illustration.
 ```
 
 **Hard constraint** (always appended last, never omit):
