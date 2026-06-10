@@ -15,8 +15,8 @@ _STYLE_MOODS: dict[str, str] = {
 
 _DEFAULT_MOOD = "cinematic atmospheric, evocative, instrumental, dramatic, no vocals"
 
-# stable-audio hard cap on generation length
-_MAX_SECONDS = 47.0
+# stable-audio-3 medium hard cap on generation length (~6m20s)
+_MAX_SECONDS = 380.0
 
 
 def _build_prompt(plot: PlotResult, style_name: str) -> str:
@@ -30,7 +30,7 @@ async def generate_music(
     duration: float,
     api_key: str,
     output_dir: Path,
-    model: str = "fal-ai/stable-audio",
+    model: str = "fal-ai/stable-audio-3/medium/text-to-audio",
 ) -> Path:
     """Generate story-aligned background music via fal.ai and save to output_dir/music.wav.
 
@@ -45,13 +45,13 @@ async def generate_music(
     prompt = _build_prompt(plot, style_name)
     seconds = min(duration, _MAX_SECONDS)
     print(f"      Music prompt  : {prompt[:90]}...")
-    print(f"      Music duration: {seconds:.0f}s (looped if video is longer)")
+    print(f"      Music duration: {seconds:.0f}s")
 
     headers = {
         "Authorization": f"Key {api_key}",
         "Content-Type": "application/json",
     }
-    payload = {"prompt": prompt, "seconds_total": seconds, "steps": 100}
+    payload = {"prompt": prompt, "duration": seconds, "output_format": "wav"}
 
     async with httpx.AsyncClient(timeout=120) as http:
         resp = await http.post(
@@ -78,7 +78,7 @@ async def generate_music(
                 result = await http.get(response_url, headers=headers)
                 result.raise_for_status()
                 data = result.json()
-                audio_url = data["audio_file"]["url"]
+                audio_url = data["audio"]["url"]
                 audio_resp = await http.get(audio_url, timeout=60)
                 audio_resp.raise_for_status()
                 music_path = output_dir / "music.wav"

@@ -34,7 +34,7 @@ class FalConfig:
     image_size: str = "square_hd"          # square_hd | square | portrait_4_3 | landscape_4_3 | ...
     enable_safety_checker: bool = False    # False = no NSFW filter (permissive); avoids blacked-out images
     music_enabled: bool = False            # True = generate background music for the panel reel
-    music_model: str = "fal-ai/stable-audio"  # fal model for music generation
+    music_model: str = "fal-ai/stable-audio-3/medium/text-to-audio"  # fal model for music generation
 
 
 @dataclass
@@ -151,7 +151,7 @@ def load_config(path: Path = Path("config.yml")) -> Config:
         image_size=raw.get("fal", {}).get("image_size", "square_hd"),
         enable_safety_checker=raw.get("fal", {}).get("enable_safety_checker", False),
         music_enabled=raw.get("fal", {}).get("music_enabled", False),
-        music_model=raw.get("fal", {}).get("music_model", "fal-ai/stable-audio"),
+        music_model=raw.get("fal", {}).get("music_model", "fal-ai/stable-audio-3/medium/text-to-audio"),
     )
     compositor = CompositorConfig(
         canvas_width=raw.get("compositor", {}).get("canvas_width", 2400),

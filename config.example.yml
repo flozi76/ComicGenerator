@@ -28,7 +28,7 @@ fal:
   image_size: square_hd # square_hd | square | portrait_4_3 | landscape_4_3 | portrait_16_9 | landscape_16_9 (seedream also: auto | auto_2K | auto_4K)
   enable_safety_checker: false # false = no NSFW filter (more permissive; avoids blacked-out images)
   music_enabled: false # true = generate story-aligned background music for the panel reel (requires fal.api_key)
-  music_model: fal-ai/stable-audio # fal model for music; stable-audio generates up to 47s (looped if video is longer)
+  music_model: fal-ai/stable-audio-3/medium/text-to-audio # fal model for music; supports up to ~6m20s
 
 compositor:
   canvas_width: 2400

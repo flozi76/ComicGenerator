@@ -18,8 +18,8 @@ from typing import Optional
 from PIL import Image
 
 from src.agents.plot_agent import PlotResult
-from src.compositor import calculate_panel_bounds
-from src.config import CompositorConfig, InstagramConfig
+from src.agents.scene_agent import SceneResult
+from src.config import InstagramConfig
 
 # Instagram reels/stories are 9:16. 1080x1920 is the standard upload size.
 FRAME_W, FRAME_H = 1080, 1920
@@ -59,6 +59,24 @@ def _format_caption(template: str, plot: PlotResult) -> str:
     except (KeyError, IndexError):
         # Bad placeholder in the template — fall back to a sane caption.
         return f"{plot.title}\n\n{plot.tagline}"
+
+
+def _fit_width(img: Image.Image, w: int, h: int) -> Image.Image:
+    """Scale image so it always spans the full width w, never cropping horizontally.
+
+    If the scaled height exceeds h, center-crop vertically. If it's shorter,
+    pad top/bottom with black. The image is never scaled down below width w.
+    """
+    src_w, src_h = img.size
+    new_w = w
+    new_h = int(src_h * (w / src_w) + 0.5)
+    resized = img.resize((new_w, new_h), Image.LANCZOS)
+    if new_h >= h:
+        y_off = (new_h - h) // 2
+        return resized.crop((0, y_off, w, y_off + h))
+    canvas = Image.new("RGB", (w, h), color=(0, 0, 0))
+    canvas.paste(resized, (0, (h - new_h) // 2))
+    return canvas
 
 
 def _letterbox_to(src: Path, w: int, h: int, dst: Path) -> Path:
@@ -113,55 +131,37 @@ def build_reel(pages: list[Path], output_dir: Path, seconds_per_page: float) -> 
 
 
 def build_panel_reel(
-    pages: list[Path],
-    plot: PlotResult,
+    scenes: list[SceneResult],
     output_dir: Path,
-    compositor_cfg: CompositorConfig,
     seconds_per_panel: float,
     audio_path: Optional[Path] = None,
 ) -> Path:
-    """Render a panel-by-panel 9:16 slideshow panel_reel.mp4 via ffmpeg."""
-    if not pages:
-        raise ValueError("No comic pages available for panel reel.")
+    """Render a panel-by-panel 9:16 slideshow panel_reel.mp4 via ffmpeg.
+
+    Each panel's source image is scaled to span the full 1080px frame width
+    (never cropped horizontally), with vertical letterboxing/cropping only
+    as needed to reach the 1920px frame height.
+    """
+    if not scenes:
+        raise ValueError("No scenes available for panel reel.")
 
     ffmpeg = _ffmpeg_exe()
-    page_by_num = {i: p for i, p in enumerate(pages, start=1)}
-    panel_bounds = calculate_panel_bounds(plot, compositor_cfg)
-    if not panel_bounds:
-        raise ValueError("No panel layout found for panel reel generation.")
 
     frames_dir = output_dir / "panel_frames"
     frames_dir.mkdir(parents=True, exist_ok=True)
 
     frame_paths: list[Path] = []
-    current_page_num = None
-    current_img = None
+    for scene in sorted(scenes, key=lambda s: s.index):
+        if not scene.image_path.exists():
+            continue
+        img = Image.open(scene.image_path).convert("RGB")
+        frame = _fit_width(img, FRAME_W, FRAME_H)
+        frame_path = frames_dir / f"panel_{scene.index:03d}.png"
+        frame.save(frame_path, format="PNG", optimize=True)
+        frame_paths.append(frame_path)
 
-    try:
-        for i, bounds in enumerate(panel_bounds, start=1):
-            page_path = page_by_num.get(bounds.page_num)
-            if page_path is None:
-                raise ValueError(f"Missing page image for page {bounds.page_num}.")
-
-            if current_page_num != bounds.page_num:
-                if current_img is not None:
-                    current_img.close()
-                current_img = Image.open(page_path).convert("RGB")
-                current_page_num = bounds.page_num
-
-            crop_box = (
-                bounds.x,
-                bounds.y,
-                bounds.x + bounds.width,
-                bounds.y + bounds.height,
-            )
-            panel_frame = current_img.crop(crop_box)
-            frame_path = frames_dir / f"panel_{i:03d}.png"
-            panel_frame.save(frame_path, format="PNG", optimize=True)
-            frame_paths.append(frame_path)
-    finally:
-        if current_img is not None:
-            current_img.close()
+    if not frame_paths:
+        raise ValueError("No panel images available for panel reel.")
 
     lines: list[str] = []
     for frame_path in frame_paths:
@@ -173,16 +173,8 @@ def build_panel_reel(
     list_path.write_text("\n".join(lines))
 
     panel_reel_path = output_dir / "panel_reel.mp4"
-    # Always scale to FRAME_W wide (upscaling if needed), then center-crop if taller
-    # than FRAME_H (very tall portrait panels), and pad top/bottom with black otherwise.
-    # The old force_original_aspect_ratio=decrease approach would give sub-1080 width
-    # for portrait panels taller than the 9:16 frame ratio.
-    vf = (
-        f"scale={FRAME_W}:-2,"
-        f"crop={FRAME_W}:min(ih\\,{FRAME_H}):0:(ih-min(ih\\,{FRAME_H}))/2,"
-        f"pad={FRAME_W}:{FRAME_H}:(ow-iw)/2:(oh-ih)/2:color=black,"
-        f"setsar=1,format=yuv420p"
-    )
+    # Frames are already cover-cropped to exactly FRAME_W x FRAME_H above.
+    vf = "setsar=1,format=yuv420p"
 
     total_duration = len(frame_paths) * seconds_per_panel
     fade_start = max(0.0, total_duration - 2.0)

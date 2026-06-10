@@ -1,7 +1,5 @@
 {
-  "access_token": "act.OABU1SNL406Q6AbhjRQH8paodhujcooo1SUbm37C2NJGOZiA44pfRyF1S0NG!4620.e1",
+  "access_token": "act.S2gAsHPc3Gkhcbbd3kYvE3sYunLZhd9SgZHWyb8r3EdegackKAHgq1Q5ekxA!4576.e1",
   "refresh_token": "rft.d8cdKrrWp69o0xjs0UtQGFxdGOVHos9cDyHZnl0iTI8O7kNg93vv8Tn46L4O!4625.e1",
-  "expires_at": 1780344223.303214,
-  "scope": "video.upload,user.info.basic",
-  "open_id": "-000Kc-54hwQ3nLusXdNVWGkuahA9JywTZfX"
+  "expires_at": 1781195185.63588
 }

@@ -22,7 +22,8 @@ from pathlib import Path
 from typing import Optional
 
 from src.agents.plot_agent import PlotResult
-from src.config import CompositorConfig, TikTokConfig
+from src.agents.scene_agent import SceneResult
+from src.config import TikTokConfig
 from src.publisher import build_panel_reel, _format_caption
 
 API = "https://open.tiktokapis.com/v2"
@@ -186,30 +187,28 @@ def _upload_one(
 
 def publish_to_tiktok(
     plot: PlotResult,
-    pages: list[Path],
+    scenes: list[SceneResult],
     output_dir: Path,
     cfg: TikTokConfig,
-    compositor_cfg: Optional[CompositorConfig] = None,
+    panel_seconds: float,
     audio_path: Optional[Path] = None,
 ) -> None:
     """Render the comic panels into a panel-by-panel reel and upload it to TikTok."""
-    if not pages:
-        raise ValueError("No comic pages to publish.")
+    if not scenes:
+        raise ValueError("No scenes to publish.")
     if not (cfg.client_key and cfg.client_secret):
         raise RuntimeError(
             "tiktok.client_key / tiktok.client_secret are not set in config.yml.\n"
             "Create an app at https://developers.tiktok.com/ and fill them in, then run:\n"
             "    python3 scripts/tiktok_login.py"
         )
-    if compositor_cfg is None:
-        raise RuntimeError("compositor_cfg is required to build the panel reel.")
 
     tokens = _refresh_if_needed(cfg, _load_tokens(cfg))
     access_token = tokens["access_token"]
 
     print("      Building panel reel video...")
     panel_video = build_panel_reel(
-        pages, plot, output_dir, compositor_cfg, compositor_cfg.panel_seconds,
+        scenes, output_dir, panel_seconds,
         audio_path=audio_path,
     )
     _upload_one(access_token, panel_video, "panel_reel.mp4", cfg, plot)

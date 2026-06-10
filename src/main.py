@@ -142,10 +142,8 @@ async def run_pipeline(
     print("\n[3.5/3] Building panel-by-panel reel...")
     try:
         panel_reel_path = build_panel_reel(
-            comic_paths,
-            plot,
+            scenes_sorted,
             output_dir,
-            cfg.compositor,
             cfg.compositor.panel_seconds,
             audio_path=music_path,
         )
@@ -173,17 +171,17 @@ async def run_pipeline(
         if do_publish:
             print(f"\n[4/4] Publishing to {target}...")
             try:
-                do(plot, comic_paths, output_dir, cfg, audio_path=music_path)
+                do(plot, comic_paths, scenes_sorted, output_dir, cfg, audio_path=music_path)
                 print(f"      Published to {target}.")
             except Exception as e:
                 print(f"      {target} publishing failed: {e}", file=sys.stderr)
 
 
-def _do_publish_tiktok(plot, comic_paths, output_dir, cfg, audio_path=None) -> None:
-    publish_to_tiktok(plot, comic_paths, output_dir, cfg.tiktok, cfg.compositor, audio_path=audio_path)
+def _do_publish_tiktok(plot, comic_paths, scenes, output_dir, cfg, audio_path=None) -> None:
+    publish_to_tiktok(plot, scenes, output_dir, cfg.tiktok, cfg.compositor.panel_seconds, audio_path=audio_path)
 
 
-def _do_publish_instagram(plot, comic_paths, output_dir, cfg, audio_path=None) -> None:
+def _do_publish_instagram(plot, comic_paths, scenes, output_dir, cfg, audio_path=None) -> None:
     publish_to_instagram(plot, comic_paths, output_dir, cfg.instagram)
 
 
