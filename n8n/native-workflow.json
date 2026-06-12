@@ -108,11 +108,29 @@
       }
     },
     {
+      "id": "invent-idea-local",
+      "name": "Invent idea (local)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [620, 200],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.IDEA_LLM_URL || 'http://model-runner.docker.internal/engines/v1').replace(/\\/+$/, '') + '/chat/completions' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: $env.IDEA_LLM_MODEL || 'ai/llama3.2', max_tokens: 150, temperature: 1, messages: [{ role: 'system', content: $('Init run').first().json.ideaSystem }, { role: 'user', content: 'Invent a fresh premise. Avoid clichés. Run seed: ' + $('Init run').first().json.runid }] }) }}",
+        "options": {
+          "timeout": 90000
+        }
+      }
+    },
+    {
       "id": "invent-idea",
       "name": "Invent idea (Claude)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [620, 300],
+      "position": [620, 420],
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 3000,
@@ -141,7 +159,7 @@
       "typeVersion": 2,
       "position": [820, 300],
       "parameters": {
-        "jsCode": "const idea = $json.content[0].text.trim();\nif (!idea) throw new Error('Claude returned an empty idea');\nreturn [{ json: { idea } }];"
+        "jsCode": "// Accepts both response shapes: local OpenAI-compatible (choices[0].message.content)\n// and Anthropic (content[0].text).\nconst j = $json;\nconst raw = (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content)\n  || (j.content && j.content[0] && j.content[0].text)\n  || '';\nconst idea = raw.trim().replace(/^[\"']|[\"']$/g, '');\nif (!idea) throw new Error('Model returned an empty idea');\nreturn [{ json: { idea } }];"
       }
     },
     {
@@ -514,7 +532,13 @@
       "main": [[{ "node": "Make run dir", "type": "main", "index": 0 }]]
     },
     "Make run dir": {
-      "main": [[{ "node": "Invent idea (Claude)", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Invent idea (local)", "type": "main", "index": 0 }]]
+    },
+    "Invent idea (local)": {
+      "main": [
+        [{ "node": "Extract idea", "type": "main", "index": 0 }],
+        [{ "node": "Invent idea (Claude)", "type": "main", "index": 0 }]
+      ]
     },
     "Invent idea (Claude)": {
       "main": [[{ "node": "Extract idea", "type": "main", "index": 0 }]]

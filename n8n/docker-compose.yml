@@ -29,6 +29,17 @@ services:
       - ..:/project
       # n8n's own state (workflows, executions, credentials).
       - n8n_data:/home/node/.n8n
+    models:
+      # Local LLM for the "Invent idea" step (Claude is the fallback).
+      # Compose injects IDEA_LLM_URL / IDEA_LLM_MODEL into the container.
+      idea_llm:
+        endpoint_var: IDEA_LLM_URL
+        model_var: IDEA_LLM_MODEL
+
+# Served by Docker Model Runner on the host (Metal GPU), pulled on compose up.
+models:
+  idea_llm:
+    model: ai/llama3.2
 
 volumes:
   n8n_data:
