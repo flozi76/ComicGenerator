@@ -40,10 +40,17 @@ Manual/Schedule ─ Init run ─ mkdir ─ Invent idea (Claude) ─ Plot (Claude
               TikTok token (refresh helper) → init upload → PUT reel.mp4 → Done
 ```
 
-- **Idea**: Claude invents a fresh noir premise each run (no idea pool to maintain).
-- **Style**: all Dylan Dog prompts/constants live in the **Init run** Code node —
-  edit there to change style, models (`claude-sonnet-4-6`, seedream, stable-audio-3),
-  or pacing (`panelSeconds`).
+- **Triggers**: a **Form Trigger** ("Run with choices") and the daily schedule.
+  Scheduled runs pick a random style × mode; the form lets you choose —
+  Style: any of `Styles/*.md` (or Random); Mode: `noir` | `fun` | `sensual`
+  (or Random). To run manually, open the workflow and click *Test workflow* —
+  n8n opens the form; when the workflow is Active the form also has a permanent
+  URL (`http://localhost:5678/form/comic-run`).
+- **Idea**: Claude invents a fresh premise each run, themed to the chosen mode.
+- **Style**: prompts come from the repo's `Styles/<name>.md` at run time (same
+  source of truth as the Python CLI; the new `## Sensual Plot System Prompt`
+  section powers sensual mode). Models (`claude-sonnet-4-6`, seedream,
+  stable-audio-3) and pacing (`panelSeconds`) live in the **Init run** Code node.
 - **API keys** come from the container environment (`.env` →
   `{{ $env.ANTHROPIC_API_KEY }}` / `FAL_API_KEY` / `TIKTOK_CLIENT_*`) — no n8n
   credentials to configure.

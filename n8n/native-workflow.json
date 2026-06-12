@@ -6,12 +6,69 @@
   },
   "nodes": [
     {
-      "id": "manual-trigger",
-      "name": "Run manually",
-      "type": "n8n-nodes-base.manualTrigger",
-      "typeVersion": 1,
+      "id": "form-trigger",
+      "name": "Run with choices",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.3,
       "position": [0, 200],
-      "parameters": {}
+      "webhookId": "3f7a1c2e-9b4d-4e6f-8a2b-5c1d7e9f0a3b",
+      "parameters": {
+        "path": "comic-run",
+        "formTitle": "Comic Generator",
+        "formDescription": "Generate a comic reel and upload it to TikTok drafts. Pick a style and mode, or leave on Random.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Style",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  { "option": "Random" },
+                  { "option": "dylan-dog" },
+                  { "option": "enki-bilal" },
+                  { "option": "hugo-pratt" },
+                  { "option": "magnus" },
+                  { "option": "manga" },
+                  { "option": "milo-manara" }
+                ]
+              }
+            },
+            {
+              "fieldLabel": "Mode",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  { "option": "Random" },
+                  { "option": "noir" },
+                  { "option": "fun" },
+                  { "option": "sensual" }
+                ]
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "pick-style-mode",
+      "name": "Pick style & mode",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [180, 300],
+      "parameters": {
+        "jsCode": "// Form runs: use the chosen dropdown values ('Random' falls through).\n// Scheduled runs: no Style/Mode keys on the input -> fully random.\nconst STYLES = ['dylan-dog', 'enki-bilal', 'hugo-pratt', 'magnus', 'manga', 'milo-manara'];\nconst MODES = ['noir', 'fun', 'sensual'];\nconst pick = (arr) => arr[Math.floor(Math.random() * arr.length)];\nconst inStyle = String($json.Style || '').toLowerCase();\nconst inMode = String($json.Mode || '').toLowerCase();\nconst style = STYLES.includes(inStyle) ? inStyle : pick(STYLES);\nconst mode = MODES.includes(inMode) ? inMode : pick(MODES);\nreturn [{ json: { style, mode } }];"
+      }
+    },
+    {
+      "id": "read-style-file",
+      "name": "Read style file",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [360, 300],
+      "parameters": {
+        "command": "=cat '/project/Styles/{{ $json.style }}.md'"
+      }
     },
     {
       "id": "schedule-trigger",
@@ -37,7 +94,7 @@
       "typeVersion": 2,
       "position": [220, 300],
       "parameters": {
-        "jsCode": "// Per-run constants: run id, output dir, models, and the Dylan Dog style\n// prompts (ported from Styles/dylan-dog.md + src/agents/*.py).\n// Edit here to change style, models, or pacing.\nconst now = new Date();\nconst pad = (n) => String(n).padStart(2, '0');\nconst runid = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;\n\nconst imageSuffix =\n  'Black and white only, absolutely no color. Italian noir comic book style, detailed pen and ink artwork, heavy crosshatching, deep shadow areas, dramatic chiaroscuro lighting, 1980s graphic novel aesthetic. Urban gothic London atmosphere, rain-slicked cobblestones, Victorian architecture, cinematic panel composition, moody and atmospheric. ' +\n  'No text, no speech bubbles, no captions, no letters, no words, no numbers visible anywhere in the image.';\n\nconst ideaSystem =\n  'You invent premises for one-page horror/noir comics in the Dylan Dog tradition — gothic, melancholic, monsters as metaphors for grief and loss. Respond with exactly ONE original story premise as a single sentence. No quotes, no preamble, no explanation.';\n\nconst plotSystem =\n  'You are a horror/noir comic book director in the Dylan Dog tradition. Given a story idea, create a comic outline that is dark, dread-laden, and Gothic — fog-choked streets, monsters as metaphors for grief and loss, beauty tarnished by horror.\\n' +\n  'Respond ONLY with a single compact JSON object — no markdown fences, no explanation.\\n' +\n  'The JSON must have exactly these fields:\\n' +\n  '{\"title\": \"short punchy story title\", \"tagline\": \"one sentence — the hook\", \"panel_count\": <integer 4-12>, \"beats\": [{\"index\": 0, \"beat\": \"one short sentence describing what happens in this scene\"}, ...]}\\n' +\n  'beats must have exactly panel_count items, indexed 0 to panel_count-1. Each beat is ONE short sentence.';\n\nconst sceneSystem =\n  'You are a noir comic book artist working in the Dylan Dog tradition. Expand a story beat into a visual panel description.\\n' +\n  'The image_prompt describes only what is seen: composition, environment, mood, camera angle. Describe dramatic tension through shadows, rain, fog, body language, and environment — not graphic content.\\n' +\n  'Respond ONLY with compact JSON, no markdown fences:\\n' +\n  '{\"caption\": \"one short atmospheric narration sentence\", \"dialogue\": \"one short spoken line, or empty string if none\", \"image_prompt\": \"visual scene description under 50 words — focus on setting, lighting, character expression, and mood. Avoid explicit violence; convey tension atmospherically.\"}';\n\nconst musicMood = 'dark horror noir, slow suspenseful strings, ominous piano, cinematic dread';\n\nreturn [{ json: {\n  runid,\n  dir: `/project/output/n8n/run-${runid}`,\n  panelSeconds: 3,\n  model: 'claude-sonnet-4-6',\n  imageModel: 'fal-ai/bytedance/seedream/v4/text-to-image',\n  imageSize: 'square_hd',\n  musicModel: 'fal-ai/stable-audio-3/medium/text-to-audio',\n  imageSuffix, ideaSystem, plotSystem, sceneSystem, musicMood,\n} }];"
+        "jsCode": "// Assemble all run config from the chosen style's Styles/<name>.md (read by\n// the previous node, same source of truth as the Python CLI) and the chosen\n// mode (noir | fun | sensual). Models/pacing are set at the bottom.\nconst md = $json.stdout;\nconst { style, mode } = $('Pick style & mode').first().json;\n\nfunction allBlocks(text, heading) {\n  const esc = heading.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');\n  const m = text.match(new RegExp('^## ' + esc + '\\\\s*$', 'm'));\n  if (!m) return [];\n  const after = text.slice(m.index + m[0].length);\n  const next = after.search(/^## /m);\n  const section = next === -1 ? after : after.slice(0, next);\n  return [...section.matchAll(/```[^\\n]*\\n([\\s\\S]*?)```/g)].map((x) => x[1].trim());\n}\nconst firstBlock = (h) => allBlocks(md, h)[0] || '';\n\nconst imageSuffix = allBlocks(md, 'Image Prompt Suffix').join(' ');\nif (!imageSuffix) throw new Error(`No Image Prompt Suffix found in Styles/${style}.md`);\n\nconst basePersona = firstBlock('Plot System Prompt') || 'You are a comic book director.';\nconst plotPersona =\n  mode === 'fun' ? (firstBlock('Fun Plot System Prompt') || basePersona)\n  : mode === 'sensual' ? (firstBlock('Sensual Plot System Prompt') || basePersona)\n  : basePersona;\n\nconst sceneHint =\n  mode === 'fun' ? ' Lean into visual comedy: exaggerated expressions, absurd props, comedic timing.'\n  : mode === 'sensual' ? ' Lean into sensual tension: elegance, intimate atmosphere, charged body language — tasteful and suggestive, never explicit.'\n  : '';\nconst scenePersona = (firstBlock('Scene System Prompt') || 'You are a comic book artist.') + sceneHint;\n\nconst ideaSystems = {\n  noir: 'You invent premises for one-page horror/noir comics — gothic, melancholic, monsters as metaphors for grief and loss. Respond with exactly ONE original story premise as a single sentence. No quotes, no preamble, no explanation.',\n  fun: 'You invent premises for one-page absurdist comedy comics — ridiculous situations, escalating chaos, genre tropes turned into punchlines. Respond with exactly ONE original story premise as a single sentence. No quotes, no preamble, no explanation.',\n  sensual: 'You invent premises for one-page sensual romance comics — desire, longing, intimate tension between two people; tasteful and suggestive, never explicit. Respond with exactly ONE original story premise as a single sentence. No quotes, no preamble, no explanation.',\n};\n\nconst plotStructure =\n  '\\nRespond ONLY with a single compact JSON object — no markdown fences, no explanation.\\n' +\n  'The JSON must have exactly these fields:\\n' +\n  '{\"title\": \"short punchy story title\", \"tagline\": \"one sentence — the hook\", \"panel_count\": <integer 4-12>, \"beats\": [{\"index\": 0, \"beat\": \"one short sentence describing what happens in this scene\"}, ...]}\\n' +\n  'beats must have exactly panel_count items, indexed 0 to panel_count-1. Each beat is ONE short sentence.';\n\nconst sceneStructure =\n  '\\nRespond ONLY with compact JSON, no markdown fences:\\n' +\n  '{\"caption\": \"one short atmospheric narration sentence\", \"dialogue\": \"one short spoken line, or empty string if none\", \"image_prompt\": \"visual scene description under 50 words — focus on setting, lighting, character expression, and mood. Avoid explicit violence; convey tension atmospherically.\"}';\n\nconst musicMoods = {\n  'dylan-dog': 'dark horror noir, slow suspenseful strings, ominous piano, cinematic dread',\n  'hugo-pratt': 'mediterranean adventure jazz, nostalgic brass, old film score, melancholic',\n  'magnus': 'dark thriller, pulsing low strings, noir detective atmosphere, brooding',\n  'manga': 'anime action score, intense orchestral, dramatic taiko drums, energetic',\n  'enki-bilal': 'sci-fi dystopia, cold electronic ambiance, eerie synthesizers, haunting',\n  'milo-manara': 'romantic European cinema, sensual strings, Italian 70s film score, lush',\n};\nconst moodMod =\n  mode === 'fun' ? ', playful, whimsical, lighthearted'\n  : mode === 'sensual' ? ', sultry, smooth, intimate'\n  : '';\nconst musicMood = (musicMoods[style] || 'cinematic atmospheric, evocative, instrumental, dramatic') + moodMod;\n\nconst now = new Date();\nconst pad = (n) => String(n).padStart(2, '0');\nconst runid = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;\n\nreturn [{ json: {\n  runid,\n  style,\n  mode,\n  dir: `/project/output/n8n/run-${runid}`,\n  panelSeconds: 3,\n  model: 'claude-sonnet-4-6',\n  imageModel: 'fal-ai/bytedance/seedream/v4/text-to-image',\n  imageSize: 'square_hd',\n  musicModel: 'fal-ai/stable-audio-3/medium/text-to-audio',\n  imageSuffix,\n  ideaSystem: ideaSystems[mode] || ideaSystems.noir,\n  plotSystem: plotPersona + plotStructure,\n  sceneSystem: scenePersona + sceneStructure,\n  musicMood,\n} }];"
       }
     },
     {
@@ -436,15 +493,21 @@
       "typeVersion": 2,
       "position": [4460, 300],
       "parameters": {
-        "jsCode": "return [{ json: {\n  message: 'Reel uploaded to TikTok drafts — open the TikTok app (Inbox/Notifications) to caption & post.',\n  title: $('Parse plot').first().json.title,\n  tagline: $('Parse plot').first().json.tagline,\n  idea: $('Parse plot').first().json.idea,\n  publish_id: $('Parse init').first().json.publish_id,\n  reel: $('Parse render').first().json.reel,\n} }];"
+        "jsCode": "return [{ json: {\n  message: 'Reel uploaded to TikTok drafts — open the TikTok app (Inbox/Notifications) to caption & post.',\n  style: $('Parse plot').first().json.style,\n  mode: $('Parse plot').first().json.mode,\n  title: $('Parse plot').first().json.title,\n  tagline: $('Parse plot').first().json.tagline,\n  idea: $('Parse plot').first().json.idea,\n  publish_id: $('Parse init').first().json.publish_id,\n  reel: $('Parse render').first().json.reel,\n} }];"
       }
     }
   ],
   "connections": {
-    "Run manually": {
-      "main": [[{ "node": "Init run", "type": "main", "index": 0 }]]
+    "Run with choices": {
+      "main": [[{ "node": "Pick style & mode", "type": "main", "index": 0 }]]
     },
     "Daily 19:00": {
+      "main": [[{ "node": "Pick style & mode", "type": "main", "index": 0 }]]
+    },
+    "Pick style & mode": {
+      "main": [[{ "node": "Read style file", "type": "main", "index": 0 }]]
+    },
+    "Read style file": {
       "main": [[{ "node": "Init run", "type": "main", "index": 0 }]]
     },
     "Init run": {
