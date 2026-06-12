@@ -1,0 +1,90 @@
+{
+  "name": "Comic Generator — Phase 0 (CLI wrapper)",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "id": "manual-trigger",
+      "name": "Run manually",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 0],
+      "parameters": {}
+    },
+    {
+      "id": "schedule-trigger",
+      "name": "Daily 19:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 200],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "triggerAtHour": 19
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "pick-idea",
+      "name": "Pick idea",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 100],
+      "parameters": {
+        "jsCode": "// Edit this pool freely — one is picked at random per run.\nconst ideas = [\n  'A vampire detective investigates a murder at a midnight concert',\n  'A lighthouse keeper discovers the fog is alive and remembers names',\n  'An undertaker receives a coffin that arrives one day before each death',\n  'A jazz pianist sells half his shadow to play one perfect song',\n  'A night-shift radio host realises every caller died years ago',\n  'A grave robber finds his own name on tomorrow\\'s headstone',\n  'A subway line appears on the map only at 3:33 am',\n  'A painter\\'s portraits age while the subjects stay young',\n];\n\nconst style = 'dylan-dog';\nconst idea = ideas[Math.floor(Math.random() * ideas.length)];\n\n// Shell-escape for the Execute Command node.\nconst sh = (s) => `'${s.replace(/'/g, `'\\\\''`)}'`;\nconst projectDir = '/Users/florianzimmermann/Development/Claude/ComicGenerator';\nconst command = `bash ${projectDir}/scripts/n8n_generate.sh ${sh(idea)} ${sh(style)}`;\n\nreturn [{ json: { idea, style, command } }];"
+      }
+    },
+    {
+      "id": "execute-command",
+      "name": "Generate & publish",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [440, 100],
+      "parameters": {
+        "command": "={{ $json.command }}"
+      }
+    }
+  ],
+  "connections": {
+    "Run manually": {
+      "main": [
+        [
+          {
+            "node": "Pick idea",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily 19:00": {
+      "main": [
+        [
+          {
+            "node": "Pick idea",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick idea": {
+      "main": [
+        [
+          {
+            "node": "Generate & publish",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {}
+}
