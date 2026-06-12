@@ -1,0 +1,527 @@
+{
+  "name": "Comic Generator — native",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "id": "manual-trigger",
+      "name": "Run manually",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 200],
+      "parameters": {}
+    },
+    {
+      "id": "schedule-trigger",
+      "name": "Daily 19:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 400],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "triggerAtHour": 19
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "init-run",
+      "name": "Init run",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 300],
+      "parameters": {
+        "jsCode": "// Per-run constants: run id, output dir, models, and the Dylan Dog style\n// prompts (ported from Styles/dylan-dog.md + src/agents/*.py).\n// Edit here to change style, models, or pacing.\nconst now = new Date();\nconst pad = (n) => String(n).padStart(2, '0');\nconst runid = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;\n\nconst imageSuffix =\n  'Black and white only, absolutely no color. Italian noir comic book style, detailed pen and ink artwork, heavy crosshatching, deep shadow areas, dramatic chiaroscuro lighting, 1980s graphic novel aesthetic. Urban gothic London atmosphere, rain-slicked cobblestones, Victorian architecture, cinematic panel composition, moody and atmospheric. ' +\n  'No text, no speech bubbles, no captions, no letters, no words, no numbers visible anywhere in the image.';\n\nconst ideaSystem =\n  'You invent premises for one-page horror/noir comics in the Dylan Dog tradition — gothic, melancholic, monsters as metaphors for grief and loss. Respond with exactly ONE original story premise as a single sentence. No quotes, no preamble, no explanation.';\n\nconst plotSystem =\n  'You are a horror/noir comic book director in the Dylan Dog tradition. Given a story idea, create a comic outline that is dark, dread-laden, and Gothic — fog-choked streets, monsters as metaphors for grief and loss, beauty tarnished by horror.\\n' +\n  'Respond ONLY with a single compact JSON object — no markdown fences, no explanation.\\n' +\n  'The JSON must have exactly these fields:\\n' +\n  '{\"title\": \"short punchy story title\", \"tagline\": \"one sentence — the hook\", \"panel_count\": <integer 4-12>, \"beats\": [{\"index\": 0, \"beat\": \"one short sentence describing what happens in this scene\"}, ...]}\\n' +\n  'beats must have exactly panel_count items, indexed 0 to panel_count-1. Each beat is ONE short sentence.';\n\nconst sceneSystem =\n  'You are a noir comic book artist working in the Dylan Dog tradition. Expand a story beat into a visual panel description.\\n' +\n  'The image_prompt describes only what is seen: composition, environment, mood, camera angle. Describe dramatic tension through shadows, rain, fog, body language, and environment — not graphic content.\\n' +\n  'Respond ONLY with compact JSON, no markdown fences:\\n' +\n  '{\"caption\": \"one short atmospheric narration sentence\", \"dialogue\": \"one short spoken line, or empty string if none\", \"image_prompt\": \"visual scene description under 50 words — focus on setting, lighting, character expression, and mood. Avoid explicit violence; convey tension atmospherically.\"}';\n\nconst musicMood = 'dark horror noir, slow suspenseful strings, ominous piano, cinematic dread';\n\nreturn [{ json: {\n  runid,\n  dir: `/project/output/n8n/run-${runid}`,\n  panelSeconds: 3,\n  model: 'claude-sonnet-4-6',\n  imageModel: 'fal-ai/bytedance/seedream/v4/text-to-image',\n  imageSize: 'square_hd',\n  musicModel: 'fal-ai/stable-audio-3/medium/text-to-audio',\n  imageSuffix, ideaSystem, plotSystem, sceneSystem, musicMood,\n} }];"
+      }
+    },
+    {
+      "id": "make-run-dir",
+      "name": "Make run dir",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [420, 300],
+      "parameters": {
+        "command": "=mkdir -p '{{ $json.dir }}'"
+      }
+    },
+    {
+      "id": "invent-idea",
+      "name": "Invent idea (Claude)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [620, 300],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: $('Init run').first().json.model, max_tokens: 150, temperature: 1, system: $('Init run').first().json.ideaSystem, messages: [{ role: 'user', content: 'Invent a fresh premise. Avoid clichés. Run seed: ' + $('Init run').first().json.runid }] }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      }
+    },
+    {
+      "id": "extract-idea",
+      "name": "Extract idea",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [820, 300],
+      "parameters": {
+        "jsCode": "const idea = $json.content[0].text.trim();\nif (!idea) throw new Error('Claude returned an empty idea');\nreturn [{ json: { idea } }];"
+      }
+    },
+    {
+      "id": "plot",
+      "name": "Plot (Claude)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1020, 300],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: $('Init run').first().json.model, max_tokens: 1500, system: $('Init run').first().json.plotSystem, messages: [{ role: 'user', content: 'Story idea:\\n' + $json.idea + '\\n\\nChoose panel_count as an integer between 4 and 12 to best fit the story pacing.' }] }) }}",
+        "options": {
+          "timeout": 120000
+        }
+      }
+    },
+    {
+      "id": "parse-plot",
+      "name": "Parse plot",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1220, 300],
+      "parameters": {
+        "jsCode": "const init = $('Init run').first().json;\nconst idea = $('Extract idea').first().json.idea;\nconst raw = $json.content[0].text;\nconst clean = raw.replace(/```(?:json)?|```/g, '').trim();\nconst plot = JSON.parse(clean);\nconst n = Number(plot.panel_count);\nif (!(n >= 4 && n <= 12)) throw new Error(`panel_count ${n} outside 4-12`);\nif (!Array.isArray(plot.beats) || plot.beats.length !== n) throw new Error(`beats count ${plot.beats && plot.beats.length} != panel_count ${n}`);\nreturn [{ json: { ...init, idea, title: plot.title, tagline: plot.tagline, panel_count: n, beats: plot.beats } }];"
+      }
+    },
+    {
+      "id": "split-beats",
+      "name": "Split beats",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1440, 160],
+      "parameters": {
+        "jsCode": "const p = $json;\nreturn p.beats.map((b, i) => ({ json: {\n  dir: p.dir,\n  index: (b.index === undefined || b.index === null) ? i : b.index,\n  beat: b.beat,\n  title: p.title,\n  tagline: p.tagline,\n  panel_count: p.panel_count,\n} }));"
+      }
+    },
+    {
+      "id": "scene-text",
+      "name": "Scene text (Claude)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1640, 160],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: $('Init run').first().json.model, max_tokens: 500, system: $('Init run').first().json.sceneSystem, messages: [{ role: 'user', content: 'Story: \"' + $json.title + '\" — ' + $json.tagline + '\\nScene ' + ($json.index + 1) + ' of ' + $json.panel_count + ': ' + $json.beat }] }) }}",
+        "options": {
+          "timeout": 120000,
+          "batching": {
+            "batch": {
+              "batchSize": 4,
+              "batchInterval": 1000
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "build-image-prompt",
+      "name": "Build image prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1840, 160],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const src = $('Split beats').item.json;\nconst suffix = $('Init run').first().json.imageSuffix;\nconst raw = $json.content[0].text;\nconst clean = raw.replace(/```(?:json)?|```/g, '').trim();\nlet scene;\ntry { scene = JSON.parse(clean); } catch (e) { scene = { image_prompt: src.beat, caption: '', dialogue: '' }; }\nconst parts = [];\nif (scene.caption) parts.push(`Caption bar at the bottom of the panel with the text: \"${scene.caption}\"`);\nif (scene.dialogue) parts.push(`A comic speech bubble in the upper area with the text: \"${scene.dialogue}\"`);\nconst prompt = `${scene.image_prompt || src.beat}. ${suffix} ${parts.join(' ')}`.trim();\nreturn { json: { ...src, caption: scene.caption || '', dialogue: scene.dialogue || '', prompt } };"
+      }
+    },
+    {
+      "id": "image-fal",
+      "name": "Image (fal)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2040, 160],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "parameters": {
+        "method": "POST",
+        "url": "=https://fal.run/{{ $('Init run').first().json.imageModel }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Key {{ $env.FAL_API_KEY }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ prompt: $json.prompt, image_size: $('Init run').first().json.imageSize, num_images: 1, enable_safety_checker: false }) }}",
+        "options": {
+          "timeout": 180000,
+          "batching": {
+            "batch": {
+              "batchSize": 4,
+              "batchInterval": 500
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "download-image",
+      "name": "Download image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2240, 160],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.images[0].url }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "write-scene-file",
+      "name": "Write scene file",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [2440, 160],
+      "parameters": {
+        "operation": "write",
+        "fileName": "={{ $('Build image prompt').item.json.dir }}/scene_{{ String($('Build image prompt').item.json.index + 1).padStart(2, '0') }}.png",
+        "dataPropertyName": "data"
+      }
+    },
+    {
+      "id": "collect-scenes",
+      "name": "Collect scenes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2640, 160],
+      "parameters": {
+        "jsCode": "// All scene files are on disk once this runs; collapse to a single item.\nconst p = $('Parse plot').first().json;\nreturn [{ json: { dir: p.dir, title: p.title, tagline: p.tagline, panel_count: p.panel_count, scenes_written: $input.all().length } }];"
+      }
+    },
+    {
+      "id": "music-fal",
+      "name": "Music (fal)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1440, 440],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000,
+      "parameters": {
+        "method": "POST",
+        "url": "=https://fal.run/{{ $json.musicModel }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Key {{ $env.FAL_API_KEY }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ prompt: $json.musicMood + ', instrumental, no vocals — ' + $json.title + ': ' + $json.tagline, duration: Math.min($json.panel_count * $json.panelSeconds, 380), output_format: 'wav' }) }}",
+        "options": {
+          "timeout": 300000
+        }
+      }
+    },
+    {
+      "id": "download-music",
+      "name": "Download music",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1640, 440],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.audio.url }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "write-music-file",
+      "name": "Write music file",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [1840, 440],
+      "parameters": {
+        "operation": "write",
+        "fileName": "={{ $('Parse plot').first().json.dir }}/music.wav",
+        "dataPropertyName": "data"
+      }
+    },
+    {
+      "id": "wait-for-both",
+      "name": "Wait for both",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [2860, 300],
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      }
+    },
+    {
+      "id": "render-reel",
+      "name": "Render reel",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [3060, 300],
+      "parameters": {
+        "command": "=bash /project/scripts/n8n_render_reel.sh '{{ $(\"Parse plot\").first().json.dir }}' {{ $(\"Parse plot\").first().json.panelSeconds }}"
+      }
+    },
+    {
+      "id": "parse-render",
+      "name": "Parse render",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3260, 300],
+      "parameters": {
+        "jsCode": "const lines = $json.stdout.trim().split('\\n');\nconst result = JSON.parse(lines[lines.length - 1]);\nif (!result.size || result.size < 1000) throw new Error(`reel missing or too small: ${JSON.stringify(result)}`);\nreturn [{ json: result }];"
+      }
+    },
+    {
+      "id": "tiktok-token",
+      "name": "TikTok token",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [3460, 300],
+      "parameters": {
+        "command": "python3 /project/scripts/n8n_tiktok_token.py /project/tiktok_token.json"
+      }
+    },
+    {
+      "id": "tiktok-init",
+      "name": "TikTok init",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3660, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "https://open.tiktokapis.com/v2/post/publish/inbox/video/init/",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $json.stdout.trim() }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ source_info: { source: 'FILE_UPLOAD', video_size: $('Parse render').first().json.size, chunk_size: $('Parse render').first().json.size, total_chunk_count: 1 } }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      }
+    },
+    {
+      "id": "parse-init",
+      "name": "Parse init",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3860, 300],
+      "parameters": {
+        "jsCode": "const err = $json.error || {};\nif (err.code && err.code !== 'ok') throw new Error(`TikTok init failed: ${err.code} — ${err.message} (log_id ${err.log_id})`);\nif (!$json.data || !$json.data.upload_url) throw new Error(`TikTok init returned no upload_url: ${JSON.stringify($json)}`);\nreturn [{ json: { upload_url: $json.data.upload_url, publish_id: $json.data.publish_id } }];"
+      }
+    },
+    {
+      "id": "read-reel",
+      "name": "Read reel",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [4060, 300],
+      "parameters": {
+        "operation": "read",
+        "fileSelector": "={{ $('Parse render').first().json.reel }}"
+      }
+    },
+    {
+      "id": "upload-to-tiktok",
+      "name": "Upload to TikTok",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [4260, 300],
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $('Parse init').first().json.upload_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "video/mp4" },
+            { "name": "Content-Range", "value": "=bytes 0-{{ $('Parse render').first().json.size - 1 }}/{{ $('Parse render').first().json.size }}" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "data",
+        "options": {
+          "timeout": 600000,
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "done",
+      "name": "Done",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4460, 300],
+      "parameters": {
+        "jsCode": "return [{ json: {\n  message: 'Reel uploaded to TikTok drafts — open the TikTok app (Inbox/Notifications) to caption & post.',\n  title: $('Parse plot').first().json.title,\n  tagline: $('Parse plot').first().json.tagline,\n  idea: $('Parse plot').first().json.idea,\n  publish_id: $('Parse init').first().json.publish_id,\n  reel: $('Parse render').first().json.reel,\n} }];"
+      }
+    }
+  ],
+  "connections": {
+    "Run manually": {
+      "main": [[{ "node": "Init run", "type": "main", "index": 0 }]]
+    },
+    "Daily 19:00": {
+      "main": [[{ "node": "Init run", "type": "main", "index": 0 }]]
+    },
+    "Init run": {
+      "main": [[{ "node": "Make run dir", "type": "main", "index": 0 }]]
+    },
+    "Make run dir": {
+      "main": [[{ "node": "Invent idea (Claude)", "type": "main", "index": 0 }]]
+    },
+    "Invent idea (Claude)": {
+      "main": [[{ "node": "Extract idea", "type": "main", "index": 0 }]]
+    },
+    "Extract idea": {
+      "main": [[{ "node": "Plot (Claude)", "type": "main", "index": 0 }]]
+    },
+    "Plot (Claude)": {
+      "main": [[{ "node": "Parse plot", "type": "main", "index": 0 }]]
+    },
+    "Parse plot": {
+      "main": [[
+        { "node": "Split beats", "type": "main", "index": 0 },
+        { "node": "Music (fal)", "type": "main", "index": 0 }
+      ]]
+    },
+    "Split beats": {
+      "main": [[{ "node": "Scene text (Claude)", "type": "main", "index": 0 }]]
+    },
+    "Scene text (Claude)": {
+      "main": [[{ "node": "Build image prompt", "type": "main", "index": 0 }]]
+    },
+    "Build image prompt": {
+      "main": [[{ "node": "Image (fal)", "type": "main", "index": 0 }]]
+    },
+    "Image (fal)": {
+      "main": [[{ "node": "Download image", "type": "main", "index": 0 }]]
+    },
+    "Download image": {
+      "main": [[{ "node": "Write scene file", "type": "main", "index": 0 }]]
+    },
+    "Write scene file": {
+      "main": [[{ "node": "Collect scenes", "type": "main", "index": 0 }]]
+    },
+    "Collect scenes": {
+      "main": [[{ "node": "Wait for both", "type": "main", "index": 0 }]]
+    },
+    "Music (fal)": {
+      "main": [[{ "node": "Download music", "type": "main", "index": 0 }]]
+    },
+    "Download music": {
+      "main": [[{ "node": "Write music file", "type": "main", "index": 0 }]]
+    },
+    "Write music file": {
+      "main": [[{ "node": "Wait for both", "type": "main", "index": 1 }]]
+    },
+    "Wait for both": {
+      "main": [[{ "node": "Render reel", "type": "main", "index": 0 }]]
+    },
+    "Render reel": {
+      "main": [[{ "node": "Parse render", "type": "main", "index": 0 }]]
+    },
+    "Parse render": {
+      "main": [[{ "node": "TikTok token", "type": "main", "index": 0 }]]
+    },
+    "TikTok token": {
+      "main": [[{ "node": "TikTok init", "type": "main", "index": 0 }]]
+    },
+    "TikTok init": {
+      "main": [[{ "node": "Parse init", "type": "main", "index": 0 }]]
+    },
+    "Parse init": {
+      "main": [[{ "node": "Read reel", "type": "main", "index": 0 }]]
+    },
+    "Read reel": {
+      "main": [[{ "node": "Upload to TikTok", "type": "main", "index": 0 }]]
+    },
+    "Upload to TikTok": {
+      "main": [[{ "node": "Done", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {}
+}

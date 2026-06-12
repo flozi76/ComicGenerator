@@ -1,46 +1,77 @@
 # n8n integration
 
 Phased migration of the pipeline to n8n — see `Notes/n8n-workflow-plan.md` for the
-full node-by-node plan. This directory holds the importable workflows.
+design. This directory holds the Docker setup and the importable workflows:
 
-## Phase 0 — CLI wrapper (`phase0-workflow.json`)
+| File | What |
+|------|------|
+| `docker-compose.yml` + `Dockerfile` | Self-hosted n8n with ffmpeg + python3 baked in |
+| `phase0-workflow.json` | Phase 0: one Execute Command node wrapping the Python CLI |
+| `native-workflow.json` | The full node-by-node pipeline (no Python CLI involved) |
 
-One Execute Command node runs the existing Python CLI on a schedule:
-
-```
-Manual / Schedule trigger → Pick idea (Code) → Generate & publish (Execute Command)
-                                                └─ scripts/n8n_generate.sh "<idea>" <style>
-                                                   └─ python3 -m src.main --idea … --publish
-```
-
-### Prerequisites (all already true for local dev)
-
-- This repo at `/Users/florianzimmermann/Development/Claude/ComicGenerator` with a
-  filled `config.yml` (API keys, `tiktok.enabled: true`, inbox mode token cached
-  in `tiktok_token.json`)
-- `python3` with `requirements.txt` installed, `ffmpeg` on PATH (brew)
-- Node.js ≥ 20
-
-### Setup
+## Running n8n (Docker, recommended)
 
 ```bash
-npm install -g n8n      # or: brew install n8n
-n8n                     # starts the UI at http://localhost:5678
+cd n8n
+cp .env.example .env       # fill in the keys (values are in config.yml)
+docker compose up -d --build
 ```
 
-1. In the n8n UI: **Workflows → Import from File** → `n8n/phase0-workflow.json`.
-2. Open the **Pick idea** node to edit the idea pool / style. If the repo lives
-   elsewhere, fix `projectDir` there too.
-3. Click **Execute workflow** (uses the manual trigger) for a test run — the
-   Execute Command node streams the CLI output into the execution log. A full run
-   takes a few minutes.
-4. Toggle the workflow **Active** to enable the daily 19:00 schedule.
+n8n UI → http://localhost:5678 (first visit creates the owner account).
+The repo is mounted at **`/project`** inside the container; workflows and run
+artifacts survive restarts (`n8n_data` volume, `output/` on the host).
 
-### Notes
+Alternative without Docker: `npm install -g n8n && n8n` — then the native
+workflow's `/project/...` paths and `$env.*` keys must exist on the host instead.
 
-- The schedule only fires while n8n itself is running — keep it running (or add
-  it to launchd/pm2) for unattended daily posts.
-- The reel lands in **TikTok drafts** (inbox mode): finish caption/hashtags and
-  post from the TikTok app.
-- A non-zero exit from the CLI fails the node, so errors are visible in n8n's
-  execution list; generation output stays in `output/<date>/story_*/` either way.
+## Native workflow (`native-workflow.json`)
+
+The full pipeline as ~25 nodes, reel-only (no comic page composite):
+
+```
+Manual/Schedule ─ Init run ─ mkdir ─ Invent idea (Claude) ─ Plot (Claude) ─ Parse plot
+                                                                      │
+                       ┌─ Split beats → Scene text (Claude, 4× batched) → Build image
+                       │  prompt → Image (fal seedream) → Download → Write scene_NN.png
+                       │  → Collect ──────────────┐
+                       │                          ├─ Merge → Render reel (ffmpeg) →
+                       └─ Music (fal stable-audio-3) → Download → music.wav ──┘
+                                                                      │
+              TikTok token (refresh helper) → init upload → PUT reel.mp4 → Done
+```
+
+- **Idea**: Claude invents a fresh noir premise each run (no idea pool to maintain).
+- **Style**: all Dylan Dog prompts/constants live in the **Init run** Code node —
+  edit there to change style, models (`claude-sonnet-4-6`, seedream, stable-audio-3),
+  or pacing (`panelSeconds`).
+- **API keys** come from the container environment (`.env` →
+  `{{ $env.ANTHROPIC_API_KEY }}` / `FAL_API_KEY` / `TIKTOK_CLIENT_*`) — no n8n
+  credentials to configure.
+- **TikTok**: `scripts/n8n_tiktok_token.py` reads/refreshes `/project/tiktok_token.json`
+  (seeded once by `scripts/tiktok_login.py` on the host), then the workflow does the
+  inbox init + binary PUT. The reel lands in **TikTok drafts**; caption/hashtags are
+  added by hand in the app (the inbox API ignores captions).
+- **Reel**: `scripts/n8n_render_reel.sh` mirrors `build_panel_reel` — every panel
+  spans the full 1080px width, vertically padded/cropped to 1920.
+- Run artifacts: `output/n8n/run-<timestamp>/` (scene PNGs, music.wav, reel.mp4).
+
+Import → run once manually (takes a few minutes) → toggle **Active** for the
+daily 19:00 schedule (`GENERIC_TIMEZONE` in `.env`).
+
+⚠️ While the native workflow's schedule is active, disable any other scheduled
+producer (Phase 0 / CLI cron) — two writers would race on the TikTok token refresh.
+
+## Phase 0 workflow (`phase0-workflow.json`)
+
+One Execute Command node runs the existing CLI end-to-end
+(`scripts/n8n_generate.sh` → `python3 -m src.main --idea … --publish`).
+Good as a fallback while iterating on the native one.
+
+- Running it **inside Docker**: edit the *Pick idea* node and change `projectDir`
+  to `/project`. The image already contains python3 + the CLI's deps (the legacy
+  instagrapi path is not installed).
+- Running it on the **host**: `projectDir` stays the absolute repo path;
+  python3/ffmpeg come from brew.
+
+Generation output goes to the usual `output/<date>/story_*/` either way; the
+reel lands in TikTok drafts (inbox mode).

@@ -1,0 +1,25 @@
+services:
+  n8n:
+    build: .
+    container_name: comicgen-n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - GENERIC_TIMEZONE=${GENERIC_TIMEZONE:-Europe/Zurich}
+      - TZ=${GENERIC_TIMEZONE:-Europe/Zurich}
+      # Keep run binaries (PNGs / wav / mp4) on disk instead of in memory.
+      - N8N_DEFAULT_BINARY_DATA_MODE=filesystem
+      # API keys read by the native workflow via {{ $env.… }} expressions.
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - FAL_API_KEY=${FAL_API_KEY}
+      - TIKTOK_CLIENT_KEY=${TIKTOK_CLIENT_KEY}
+      - TIKTOK_CLIENT_SECRET=${TIKTOK_CLIENT_SECRET}
+    volumes:
+      # The repo (read-write: output/, tiktok_token.json get written).
+      - ..:/project
+      # n8n's own state (workflows, executions, credentials).
+      - n8n_data:/home/node/.n8n
+
+volumes:
+  n8n_data:
