@@ -313,7 +313,25 @@ def main() -> None:
     Path(token_file).write_text(json.dumps(tokens, indent=2))
     print(f"\n✅ Saved tokens to {token_file}")
     print(f"   scope: {tokens['scope']}")
-    print("   You can now publish with the main app (tiktok.enabled: true).")
+
+    # Warn if the required scope for the configured mode is missing.
+    granted_scope = tokens["scope"]
+    if mode == "direct" and "video.publish" not in granted_scope:
+        print(
+            "\n⚠️  WARNING: 'video.publish' was NOT granted (got: " + granted_scope + ").\n"
+            "   Direct-mode posting will fail. To fix:\n"
+            "   1. Go to https://developers.tiktok.com/ → your app → Products.\n"
+            "   2. Under Content Posting API, enable the 'video.publish' scope.\n"
+            "   3. Re-run this script to re-authorize with the correct scope."
+        )
+    elif mode == "inbox" and "video.upload" not in granted_scope:
+        print(
+            "\n⚠️  WARNING: 'video.upload' was NOT granted (got: " + granted_scope + ").\n"
+            "   Inbox/draft posting will fail. Enable 'video.upload' scope in your\n"
+            "   TikTok app at https://developers.tiktok.com/ and re-run this script."
+        )
+    else:
+        print("   You can now publish with the main app (tiktok.enabled: true).")
 
 
 if __name__ == "__main__":

@@ -99,9 +99,18 @@ def _init(access_token: str, body: dict, endpoint: str) -> dict:
     )
     data = resp.json()
     err = data.get("error") or {}
-    if err.get("code") not in (None, "ok"):
+    code = err.get("code")
+    if code not in (None, "ok"):
+        if code == "unaudited_client_can_only_post_to_private_accounts":
+            raise RuntimeError(
+                "TikTok direct post rejected: your app is unaudited, and TikTok requires "
+                "the account to be set to Private for unaudited apps.\n"
+                "Fix option A: In the TikTok app → Settings → Privacy → enable 'Private account'.\n"
+                "Fix option B: Switch tiktok.mode to 'inbox' in config.yml (no account change needed).\n"
+                f"(log_id {err.get('log_id')})"
+            )
         raise RuntimeError(
-            f"TikTok init failed: {err.get('code')} — {err.get('message')} "
+            f"TikTok init failed: {code} — {err.get('message')} "
             f"(log_id {err.get('log_id')})"
         )
     return data["data"]
@@ -205,6 +214,19 @@ def publish_to_tiktok(
 
     tokens = _refresh_if_needed(cfg, _load_tokens(cfg))
     access_token = tokens["access_token"]
+
+    # Guard: check the saved token has the scope required for the configured mode.
+    saved_scope = tokens.get("scope", "")
+    if saved_scope:
+        required = "video.publish" if cfg.mode == "direct" else "video.upload"
+        if required not in saved_scope:
+            raise RuntimeError(
+                f"TikTok token is missing the '{required}' scope (token has: '{saved_scope}').\n"
+                f"The token was likely obtained for a different mode. Re-authorize:\n"
+                f"    python3 scripts/tiktok_login.py\n"
+                f"Also make sure '{required}' is enabled under Content Posting API scopes\n"
+                f"at https://developers.tiktok.com/ for your app."
+            )
 
     print("      Building panel reel video...")
     panel_video = build_panel_reel(
