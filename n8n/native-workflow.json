@@ -325,7 +325,7 @@
       "position": [2040, 160],
       "retryOnFail": true,
       "maxTries": 3,
-      "waitBetweenTries": 5000,
+      "waitBetweenTries": 10000,
       "parameters": {
         "method": "POST",
         "url": "=https://fal.run/{{ $('Init run').first().json.imageModel }}",
@@ -342,8 +342,8 @@
           "timeout": 180000,
           "batching": {
             "batch": {
-              "batchSize": 4,
-              "batchInterval": 500
+              "batchSize": 2,
+              "batchInterval": 4000
             }
           }
         }
