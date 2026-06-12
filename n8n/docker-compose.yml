@@ -10,6 +10,9 @@ services:
       - TZ=${GENERIC_TIMEZONE:-Europe/Zurich}
       # Keep run binaries (PNGs / wav / mp4) on disk instead of in memory.
       - N8N_DEFAULT_BINARY_DATA_MODE=filesystem
+      # n8n 2.x excludes the Execute Command node by default; we need it for
+      # ffmpeg rendering and the TikTok token helper.
+      - NODES_EXCLUDE=[]
       # API keys read by the native workflow via {{ $env.… }} expressions.
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - FAL_API_KEY=${FAL_API_KEY}
