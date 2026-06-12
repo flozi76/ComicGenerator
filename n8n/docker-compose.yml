@@ -13,6 +13,9 @@ services:
       # n8n 2.x excludes the Execute Command node by default; we need it for
       # ffmpeg rendering and the TikTok token helper.
       - NODES_EXCLUDE=[]
+      # n8n 2.x also blocks $env.* in expressions by default; the workflow reads
+      # the API keys below that way.
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
       # API keys read by the native workflow via {{ $env.… }} expressions.
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - FAL_API_KEY=${FAL_API_KEY}
