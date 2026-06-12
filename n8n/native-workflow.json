@@ -163,11 +163,29 @@
       }
     },
     {
+      "id": "plot-local",
+      "name": "Plot (local)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1020, 200],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.IDEA_LLM_URL || 'http://model-runner.docker.internal/engines/v1').replace(/\\/+$/, '') + '/chat/completions' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: $env.IDEA_LLM_MODEL || 'ai/llama3.2', max_tokens: 1500, response_format: { type: 'json_object' }, messages: [{ role: 'system', content: $('Init run').first().json.plotSystem }, { role: 'user', content: 'Story idea:\\n' + $json.idea + '\\n\\nChoose panel_count as an integer between 4 and 12 to best fit the story pacing.' }] }) }}",
+        "options": {
+          "timeout": 120000
+        }
+      }
+    },
+    {
       "id": "plot",
       "name": "Plot (Claude)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1020, 300],
+      "position": [1020, 420],
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 3000,
@@ -183,7 +201,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ model: $('Init run').first().json.model, max_tokens: 1500, system: $('Init run').first().json.plotSystem, messages: [{ role: 'user', content: 'Story idea:\\n' + $json.idea + '\\n\\nChoose panel_count as an integer between 4 and 12 to best fit the story pacing.' }] }) }}",
+        "jsonBody": "={{ JSON.stringify({ model: $('Init run').first().json.model, max_tokens: 1500, system: $('Init run').first().json.plotSystem, messages: [{ role: 'user', content: 'Story idea:\\n' + $('Extract idea').first().json.idea + '\\n\\nChoose panel_count as an integer between 4 and 12 to best fit the story pacing.' }] }) }}",
         "options": {
           "timeout": 120000
         }
@@ -196,7 +214,7 @@
       "typeVersion": 2,
       "position": [1220, 300],
       "parameters": {
-        "jsCode": "const init = $('Init run').first().json;\nconst idea = $('Extract idea').first().json.idea;\nconst raw = $json.content[0].text;\nconst clean = raw.replace(/```(?:json)?|```/g, '').trim();\nconst plot = JSON.parse(clean);\nconst n = Number(plot.panel_count);\nif (!(n >= 4 && n <= 12)) throw new Error(`panel_count ${n} outside 4-12`);\nif (!Array.isArray(plot.beats) || plot.beats.length !== n) throw new Error(`beats count ${plot.beats && plot.beats.length} != panel_count ${n}`);\nreturn [{ json: { ...init, idea, title: plot.title, tagline: plot.tagline, panel_count: n, beats: plot.beats } }];"
+        "jsCode": "const init = $('Init run').first().json;\nconst idea = $('Extract idea').first().json.idea;\n// Accepts both response shapes: local OpenAI-compatible and Anthropic.\nconst j = $json;\nconst raw = (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content)\n  || (j.content && j.content[0] && j.content[0].text)\n  || '';\nconst clean = raw.replace(/```(?:json)?|```/g, '').trim();\n// Local models sometimes wrap the JSON in prose — extract the outermost {...}.\nconst start = clean.indexOf('{');\nconst end = clean.lastIndexOf('}');\nif (start === -1 || end <= start) throw new Error('no JSON object in plot response');\nconst plot = JSON.parse(clean.slice(start, end + 1));\nif (!Array.isArray(plot.beats) || plot.beats.length === 0) throw new Error('plot has no beats array');\nlet n = Number(plot.panel_count);\n// Small local models sometimes miscount; trust the beats array when in range.\nif (plot.beats.length !== n && plot.beats.length >= 4 && plot.beats.length <= 12) n = plot.beats.length;\nif (!(n >= 4 && n <= 12)) throw new Error(`panel_count ${n} outside 4-12`);\nif (plot.beats.length !== n) throw new Error(`beats count ${plot.beats.length} != panel_count ${n}`);\nif (!plot.title) throw new Error('plot has no title');\nreturn [{ json: { ...init, idea, title: plot.title, tagline: plot.tagline || '', panel_count: n, beats: plot.beats.slice(0, n) } }];"
       }
     },
     {
@@ -210,11 +228,35 @@
       }
     },
     {
+      "id": "scene-text-local",
+      "name": "Scene text (local)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1640, 60],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.IDEA_LLM_URL || 'http://model-runner.docker.internal/engines/v1').replace(/\\/+$/, '') + '/chat/completions' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: $env.IDEA_LLM_MODEL || 'ai/llama3.2', max_tokens: 500, response_format: { type: 'json_object' }, messages: [{ role: 'system', content: $('Init run').first().json.sceneSystem }, { role: 'user', content: 'Story: \"' + $json.title + '\" — ' + $json.tagline + '\\nScene ' + ($json.index + 1) + ' of ' + $json.panel_count + ': ' + $json.beat }] }) }}",
+        "options": {
+          "timeout": 120000,
+          "batching": {
+            "batch": {
+              "batchSize": 2,
+              "batchInterval": 500
+            }
+          }
+        }
+      }
+    },
+    {
       "id": "scene-text",
       "name": "Scene text (Claude)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1640, 160],
+      "position": [1640, 280],
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 3000,
@@ -230,7 +272,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ model: $('Init run').first().json.model, max_tokens: 500, system: $('Init run').first().json.sceneSystem, messages: [{ role: 'user', content: 'Story: \"' + $json.title + '\" — ' + $json.tagline + '\\nScene ' + ($json.index + 1) + ' of ' + $json.panel_count + ': ' + $json.beat }] }) }}",
+        "jsonBody": "={{ JSON.stringify({ model: $('Init run').first().json.model, max_tokens: 500, system: $('Init run').first().json.sceneSystem, messages: [{ role: 'user', content: 'Story: \"' + $('Split beats').item.json.title + '\" — ' + $('Split beats').item.json.tagline + '\\nScene ' + ($('Split beats').item.json.index + 1) + ' of ' + $('Split beats').item.json.panel_count + ': ' + $('Split beats').item.json.beat }] }) }}",
         "options": {
           "timeout": 120000,
           "batching": {
@@ -243,14 +285,25 @@
       }
     },
     {
+      "id": "merge-scenes",
+      "name": "Merge scene texts",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1840, 60],
+      "parameters": {
+        "mode": "append",
+        "options": {}
+      }
+    },
+    {
       "id": "build-image-prompt",
       "name": "Build image prompt",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1840, 160],
+      "position": [2040, 60],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const src = $('Split beats').item.json;\nconst suffix = $('Init run').first().json.imageSuffix;\nconst raw = $json.content[0].text;\nconst clean = raw.replace(/```(?:json)?|```/g, '').trim();\nlet scene;\ntry { scene = JSON.parse(clean); } catch (e) { scene = { image_prompt: src.beat, caption: '', dialogue: '' }; }\nconst parts = [];\nif (scene.caption) parts.push(`Caption bar at the bottom of the panel with the text: \"${scene.caption}\"`);\nif (scene.dialogue) parts.push(`A comic speech bubble in the upper area with the text: \"${scene.dialogue}\"`);\nconst prompt = `${scene.image_prompt || src.beat}. ${suffix} ${parts.join(' ')}`.trim();\nreturn { json: { ...src, caption: scene.caption || '', dialogue: scene.dialogue || '', prompt } };"
+        "jsCode": "const src = $('Split beats').item.json;\nconst suffix = $('Init run').first().json.imageSuffix;\n// Accepts both response shapes: local OpenAI-compatible and Anthropic. Any\n// parse failure falls back to the raw beat as the image prompt.\nconst j = $json;\nconst raw = (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content)\n  || (j.content && j.content[0] && j.content[0].text)\n  || '';\nconst clean = raw.replace(/```(?:json)?|```/g, '').trim();\nlet scene;\ntry {\n  const start = clean.indexOf('{');\n  const end = clean.lastIndexOf('}');\n  scene = JSON.parse(clean.slice(start, end + 1));\n} catch (e) { scene = { image_prompt: src.beat, caption: '', dialogue: '' }; }\nconst parts = [];\nif (scene.caption) parts.push(`Caption bar at the bottom of the panel with the text: \"${scene.caption}\"`);\nif (scene.dialogue) parts.push(`A comic speech bubble in the upper area with the text: \"${scene.dialogue}\"`);\nconst prompt = `${scene.image_prompt || src.beat}. ${suffix} ${parts.join(' ')}`.trim();\nreturn { json: { ...src, caption: scene.caption || '', dialogue: scene.dialogue || '', prompt } };"
       }
     },
     {
@@ -544,7 +597,13 @@
       "main": [[{ "node": "Extract idea", "type": "main", "index": 0 }]]
     },
     "Extract idea": {
-      "main": [[{ "node": "Plot (Claude)", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Plot (local)", "type": "main", "index": 0 }]]
+    },
+    "Plot (local)": {
+      "main": [
+        [{ "node": "Parse plot", "type": "main", "index": 0 }],
+        [{ "node": "Plot (Claude)", "type": "main", "index": 0 }]
+      ]
     },
     "Plot (Claude)": {
       "main": [[{ "node": "Parse plot", "type": "main", "index": 0 }]]
@@ -556,9 +615,18 @@
       ]]
     },
     "Split beats": {
-      "main": [[{ "node": "Scene text (Claude)", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Scene text (local)", "type": "main", "index": 0 }]]
+    },
+    "Scene text (local)": {
+      "main": [
+        [{ "node": "Merge scene texts", "type": "main", "index": 0 }],
+        [{ "node": "Scene text (Claude)", "type": "main", "index": 0 }]
+      ]
     },
     "Scene text (Claude)": {
+      "main": [[{ "node": "Merge scene texts", "type": "main", "index": 1 }]]
+    },
+    "Merge scene texts": {
       "main": [[{ "node": "Build image prompt", "type": "main", "index": 0 }]]
     },
     "Build image prompt": {

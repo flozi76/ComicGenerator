@@ -46,12 +46,14 @@ Manual/Schedule ─ Init run ─ mkdir ─ Invent idea (Claude) ─ Plot (Claude
   (or Random). To run manually, open the workflow and click *Test workflow* —
   n8n opens the form; when the workflow is Active the form also has a permanent
   URL (`http://localhost:5678/form/comic-run`).
-- **Idea**: a local LLM invents a fresh premise each run, themed to the chosen
-  mode — served by **Docker Model Runner** on the host (Metal GPU; the
+- **Text generation (idea, plot, scene text)**: a local LLM runs each step
+  first — served by **Docker Model Runner** on the host (Metal GPU; the
   `models:` block in docker-compose pulls `ai/llama3.2` and injects
-  `IDEA_LLM_URL`/`IDEA_LLM_MODEL`). If the local model is unreachable, the
-  node's error output falls back to Claude automatically. Needs Docker
-  Desktop 4.43+ with Model Runner enabled (Settings → AI).
+  `IDEA_LLM_URL`/`IDEA_LLM_MODEL`). Each local node's error output falls back
+  to the matching Claude node (per scene item, via a Merge). The parsers
+  tolerate prose-wrapped/miscounted JSON from small models; a hard parse
+  failure of the plot still fails the run (rare). Needs Docker Desktop 4.43+
+  with Model Runner enabled (Settings → AI).
 - **Style**: prompts come from the repo's `Styles/<name>.md` at run time (same
   source of truth as the Python CLI; the new `## Sensual Plot System Prompt`
   section powers sensual mode). Models (`claude-sonnet-4-6`, seedream,
